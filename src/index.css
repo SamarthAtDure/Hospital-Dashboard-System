@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+body {
+  font-family: sans-serif;
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+.d3-tooltip {
+  position: fixed;
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 999;
+}

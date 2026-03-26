@@ -1,0 +1,64 @@
+{
+  "stats": {
+    "totalPatients": 1284,
+    "totalDoctors": 48,
+    "appointments": 320,
+    "revenue": "$52,400"
+  },
+
+  "patientsPerMonth": [
+    { "month": "Jan", "patients": 120 },
+    { "month": "Feb", "patients": 150 },
+    { "month": "Mar", "patients": 170 },
+    { "month": "Apr", "patients": 140 },
+    { "month": "May", "patients": 190 },
+    { "month": "Jun", "patients": 210 },
+    { "month": "Jul", "patients": 180 },
+    { "month": "Aug", "patients": 220 }
+  ],
+
+  "patientsPerDepartment": [
+    { "department": "Cardiology",   "patients": 40 },
+    { "department": "Neurology",    "patients": 25 },
+    { "department": "Orthopedics",  "patients": 30 },
+    { "department": "Pediatrics",   "patients": 35 },
+    { "department": "General",      "patients": 50 }
+  ],
+
+  "diseaseDistribution": [
+    { "disease": "Diabetes",     "count": 30 },
+    { "disease": "Heart Disease","count": 20 },
+    { "disease": "Cancer",       "count": 10 },
+    { "disease": "Flu",          "count": 25 },
+    { "disease": "COVID-19",     "count": 15 }
+  ],
+
+  "patients": [
+    { "id": "P001", "name": "John Smith",    "age": 45, "department": "Cardiology",  "status": "Admitted" },
+    { "id": "P002", "name": "Sarah Lee",     "age": 32, "department": "Neurology",   "status": "Discharged" },
+    { "id": "P003", "name": "Mike Johnson",  "age": 58, "department": "Orthopedics", "status": "Admitted" },
+    { "id": "P004", "name": "Emily Davis",   "age": 27, "department": "Pediatrics",  "status": "OPD" },
+    { "id": "P005", "name": "Robert Brown",  "age": 63, "department": "General",     "status": "Discharged" },
+    { "id": "P006", "name": "Linda Wilson",  "age": 39, "department": "Cardiology",  "status": "OPD" },
+    { "id": "P007", "name": "James Taylor",  "age": 51, "department": "Neurology",   "status": "Admitted" },
+    { "id": "P008", "name": "Anna Martinez", "age": 29, "department": "General",     "status": "Discharged" }
+  ],
+
+  "doctors": [
+    { "id": "D001", "name": "Dr. Alan Grant",    "department": "Cardiology",  "experience": "12 yrs", "status": "Available" },
+    { "id": "D002", "name": "Dr. Susan Park",    "department": "Neurology",   "experience": "8 yrs",  "status": "On Leave" },
+    { "id": "D003", "name": "Dr. Kevin Patel",   "department": "Orthopedics", "experience": "15 yrs", "status": "Available" },
+    { "id": "D004", "name": "Dr. Maria Lopez",   "department": "Pediatrics",  "experience": "6 yrs",  "status": "Available" },
+    { "id": "D005", "name": "Dr. Chris Evans",   "department": "General",     "experience": "10 yrs", "status": "Busy" },
+    { "id": "D006", "name": "Dr. Rachel Green",  "department": "Cardiology",  "experience": "9 yrs",  "status": "Available" }
+  ],
+
+  "appointments": [
+    { "id": "A001", "patient": "John Smith",    "doctor": "Dr. Alan Grant",   "date": "2024-08-01", "department": "Cardiology",  "status": "Confirmed" },
+    { "id": "A002", "patient": "Sarah Lee",     "doctor": "Dr. Susan Park",   "date": "2024-08-02", "department": "Neurology",   "status": "Pending" },
+    { "id": "A003", "patient": "Mike Johnson",  "doctor": "Dr. Kevin Patel",  "date": "2024-08-03", "department": "Orthopedics", "status": "Confirmed" },
+    { "id": "A004", "patient": "Emily Davis",   "doctor": "Dr. Maria Lopez",  "date": "2024-08-04", "department": "Pediatrics",  "status": "Cancelled" },
+    { "id": "A005", "patient": "Robert Brown",  "doctor": "Dr. Chris Evans",  "date": "2024-08-05", "department": "General",     "status": "Confirmed" },
+    { "id": "A006", "patient": "Linda Wilson",  "doctor": "Dr. Rachel Green", "date": "2024-08-06", "department": "Cardiology",  "status": "Pending" }
+  ]
+}
