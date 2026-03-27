@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Table, Tag, Modal, Form, Input, Select, DatePicker, Button, message, Timeline, Descriptions } from "antd";
+import { Table, Tag, Modal, Input, Select, DatePicker, Button, message, Timeline, Descriptions } from "antd";
 import dayjs from "dayjs";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
 const API = "http://localhost:5000";
 const statusColor = { Stable: "green", Recovering: "blue", Critical: "red" };
@@ -9,12 +11,79 @@ function DailyReport() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = user.role === "admin";
 
-  const [patients, setPatients]       = useState([]);
-  const [selected, setSelected]       = useState(null);
-  const [reports,  setReports]        = useState([]);
-  const [modalOpen, setModalOpen]     = useState(false);
-  const [viewMode, setViewMode]       = useState("table"); // "table" | "timeline"
-  const [form] = Form.useForm();
+  const [patients,  setPatients]  = useState([]);
+  const [selected,  setSelected]  = useState(null);
+  const [reports,   setReports]   = useState([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [viewMode,  setViewMode]  = useState("table");
+
+  // ── Yup schema ────────────────────────────────────────────────────
+  const dailyReportSchema = Yup.object({
+    date: Yup.date()
+      .typeError("Select a valid date")
+      .required("Date is required")
+      .max(dayjs().endOf("day").toDate(), "Date cannot be in the future"),
+    visitSlot: Yup.string()
+      .required("Visit slot is required"),
+    patientStatus: Yup.string()
+      .required("Patient status is required"),
+    temperature: Yup.string()
+      .test("temp-range", "Temperature must be between 90 and 110 °F", (val) => {
+        if (!val || val.trim() === "") return true;
+        const n = parseFloat(val);
+        return !isNaN(n) && n >= 90 && n <= 110;
+      }),
+    bloodPressure: Yup.string()
+      .test("bp-format", "Format must be like 120/80", (val) => {
+        if (!val || val.trim() === "") return true;
+        return /^\d{2,3}\/\d{2,3}$/.test(val.trim());
+      }),
+    heartRate: Yup.string()
+      .test("hr-range", "Heart rate must be between 30 and 200", (val) => {
+        if (!val || val.trim() === "") return true;
+        const n = parseFloat(val);
+        return !isNaN(n) && n >= 30 && n <= 200;
+      }),
+    oxygenLevel: Yup.string()
+      .test("spo2-range", "SpO₂ must be between 50 and 100", (val) => {
+        if (!val || val.trim() === "") return true;
+        const n = parseFloat(val);
+        return !isNaN(n) && n >= 50 && n <= 100;
+      }),
+  });
+
+  // ── Formik ────────────────────────────────────────────────────────
+  const formik = useFormik({
+    initialValues: {
+      date: null, visitSlot: "", visitTime: "", patientStatus: "",
+      temperature: "", bloodPressure: "", heartRate: "", oxygenLevel: "",
+      symptoms: "", diagnosis: "", treatment: "", medicines: "", doctorRemarks: "",
+    },
+    validationSchema: dailyReportSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      const payload = {
+        patientId:   selected._id,
+        patientName: selected.name,
+        doctorId:    user.id,
+        doctorName:  user.name,
+        department:  selected.department,
+        ...values,
+        date: dayjs(values.date).format("YYYY-MM-DD"),
+      };
+      const res = await fetch(`${API}/daily-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) { message.error(json.message); setSubmitting(false); return; }
+      message.success("Daily report saved.");
+      resetForm();
+      setModalOpen(false);
+      fetchReports(selected._id);
+      setSubmitting(false);
+    },
+  });
 
   const fetchPatients = useCallback(async () => {
     const url = isAdmin
@@ -38,37 +107,22 @@ function DailyReport() {
   };
 
   const openAdd = () => {
-    form.resetFields();
-    form.setFieldsValue({
-      patientId:   selected._id,
-      patientName: selected.name,
-      doctorId:    user.id,
-      doctorName:  user.name,
-      department:  selected.department,
-      date:        dayjs(),
+    const now = dayjs();
+    const hour = now.hour();
+    const slot = hour < 12 ? "Morning" : hour < 17 ? "Noon" : "Evening";
+    formik.resetForm({
+      values: {
+        date: new Date(), visitSlot: slot, visitTime: now.format("HH:mm"), patientStatus: "",
+        temperature: "", bloodPressure: "", heartRate: "", oxygenLevel: "",
+        symptoms: "", diagnosis: "", treatment: "", medicines: "", doctorRemarks: "",
+      },
     });
     setModalOpen(true);
   };
 
-  const handleSubmit = async (values) => {
-    const payload = {
-      ...values,
-      date: values.date.format("YYYY-MM-DD"),
-    };
-    const res = await fetch(`${API}/daily-reports`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    if (!res.ok) { message.error(json.message); return; }
-    message.success("Daily report saved.");
-    setModalOpen(false);
-    fetchReports(selected._id);
-  };
-
   const reportColumns = [
     { title: "Date",        dataIndex: "date",        sorter: (a, b) => a.date.localeCompare(b.date) },
+    { title: "Visit", dataIndex: "visitSlot", render: (s, r) => s ? `${s}${r.visitTime ? ` (${r.visitTime})` : ""}` : "—" },
     { title: "Temp (°F)",   dataIndex: "temperature" },
     { title: "BP",          dataIndex: "bloodPressure" },
     { title: "Heart Rate",  dataIndex: "heartRate" },
@@ -164,7 +218,10 @@ function DailyReport() {
                         <div className="bg-slate-50 rounded-lg p-3 mb-1">
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-semibold text-sm">{r.date}</span>
-                            <Tag color={statusColor[r.patientStatus] || "default"}>{r.patientStatus}</Tag>
+                            <div className="flex gap-1 items-center">
+                              {r.visitSlot && <Tag color="purple">{r.visitSlot}{r.visitTime ? ` · ${r.visitTime}` : ""}</Tag>}
+                              <Tag color={statusColor[r.patientStatus] || "default"}>{r.patientStatus}</Tag>
+                            </div>
                           </div>
                           <Descriptions size="small" column={3}>
                             <Descriptions.Item label="Temp">{r.temperature || "—"}</Descriptions.Item>
@@ -194,44 +251,149 @@ function DailyReport() {
       <Modal
         title={`Daily Report — ${selected?.name} (${dayjs().format("YYYY-MM-DD")})`}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { setModalOpen(false); formik.resetForm(); }}
         footer={null}
         width={680}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-3">
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="patientId"   hidden><Input /></Form.Item>
-            <Form.Item name="patientName" hidden><Input /></Form.Item>
-            <Form.Item name="doctorId"    hidden><Input /></Form.Item>
-            <Form.Item name="doctorName"  hidden><Input /></Form.Item>
-            <Form.Item name="department"  hidden><Input /></Form.Item>
+        <form onSubmit={formik.handleSubmit} noValidate className="mt-3">
 
-            <Form.Item name="date" label="Date" rules={[{ required: true }]}>
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item name="patientStatus" label="Patient Status" rules={[{ required: true }]}>
-              <Select options={["Stable", "Recovering", "Critical"].map((v) => ({ value: v, label: v }))} />
-            </Form.Item>
+          {/* Date + Visit Slot + Patient Status */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Date</label>
+              <DatePicker
+                className="w-full"
+                value={formik.values.date ? dayjs(formik.values.date) : null}
+                onChange={(d) => formik.setFieldValue("date", d ? d.toDate() : null)}
+                onBlur={() => formik.setFieldTouched("date", true)}
+                status={formik.touched.date && formik.errors.date ? "error" : ""}
+                disabledDate={(current) => current && current > dayjs().endOf("day")}
+              />
+              {formik.touched.date && formik.errors.date && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.date}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Visit Slot</label>
+              <Select
+                className="w-full"
+                placeholder="Select slot"
+                value={formik.values.visitSlot || undefined}
+                onChange={(val) => formik.setFieldValue("visitSlot", val)}
+                onBlur={() => formik.setFieldTouched("visitSlot", true)}
+                status={formik.touched.visitSlot && formik.errors.visitSlot ? "error" : ""}
+                options={["Morning", "Noon", "Evening"].map((v) => ({ value: v, label: v }))}
+              />
+              {formik.touched.visitSlot && formik.errors.visitSlot && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.visitSlot}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Patient Status</label>
+              <Select
+                className="w-full"
+                placeholder="Select status"
+                value={formik.values.patientStatus || undefined}
+                onChange={(val) => formik.setFieldValue("patientStatus", val)}
+                onBlur={() => formik.setFieldTouched("patientStatus", true)}
+                status={formik.touched.patientStatus && formik.errors.patientStatus ? "error" : ""}
+                options={["Stable", "Recovering", "Critical"].map((v) => ({ value: v, label: v }))}
+              />
+              {formik.touched.patientStatus && formik.errors.patientStatus && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.patientStatus}</p>
+              )}
+            </div>
           </div>
 
-          <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Vitals</p>
+          {/* Vitals */}
+          <p className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Vitals</p>
           <div className="grid grid-cols-4 gap-3">
-            <Form.Item name="temperature"   label="Temp (°F)"><Input placeholder="98.6" /></Form.Item>
-            <Form.Item name="bloodPressure" label="BP"><Input placeholder="120/80" /></Form.Item>
-            <Form.Item name="heartRate"     label="Heart Rate"><Input placeholder="72 bpm" /></Form.Item>
-            <Form.Item name="oxygenLevel"   label="SpO₂ (%)"><Input placeholder="98" /></Form.Item>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Temp (°F)</label>
+              <Input
+                name="temperature"
+                placeholder="98.6"
+                value={formik.values.temperature}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.temperature && formik.errors.temperature ? "error" : ""}
+              />
+              {formik.touched.temperature && formik.errors.temperature && (
+                <p className="text-red-500 text-[11px] mt-1">{formik.errors.temperature}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">BP</label>
+              <Input
+                name="bloodPressure"
+                placeholder="120/80"
+                value={formik.values.bloodPressure}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.bloodPressure && formik.errors.bloodPressure ? "error" : ""}
+              />
+              {formik.touched.bloodPressure && formik.errors.bloodPressure && (
+                <p className="text-red-500 text-[11px] mt-1">{formik.errors.bloodPressure}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Heart Rate</label>
+              <Input
+                name="heartRate"
+                placeholder="72"
+                value={formik.values.heartRate}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.heartRate && formik.errors.heartRate ? "error" : ""}
+              />
+              {formik.touched.heartRate && formik.errors.heartRate && (
+                <p className="text-red-500 text-[11px] mt-1">{formik.errors.heartRate}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">SpO₂ (%)</label>
+              <Input
+                name="oxygenLevel"
+                placeholder="98"
+                value={formik.values.oxygenLevel}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.oxygenLevel && formik.errors.oxygenLevel ? "error" : ""}
+              />
+              {formik.touched.oxygenLevel && formik.errors.oxygenLevel && (
+                <p className="text-red-500 text-[11px] mt-1">{formik.errors.oxygenLevel}</p>
+              )}
+            </div>
           </div>
 
-          <Form.Item name="symptoms"  label="Symptoms"><Input.TextArea rows={2} /></Form.Item>
-          <Form.Item name="diagnosis" label="Diagnosis"><Input.TextArea rows={2} /></Form.Item>
-          <Form.Item name="treatment" label="Treatment"><Input.TextArea rows={2} /></Form.Item>
-          <Form.Item name="medicines" label="Medicines"><Input.TextArea rows={2} /></Form.Item>
-          <Form.Item name="doctorRemarks" label="Doctor Remarks"><Input.TextArea rows={2} /></Form.Item>
+          {/* Text areas */}
+          {[
+            { name: "symptoms",     label: "Symptoms" },
+            { name: "diagnosis",    label: "Diagnosis" },
+            { name: "treatment",    label: "Treatment" },
+            { name: "medicines",    label: "Medicines" },
+            { name: "doctorRemarks",label: "Doctor Remarks" },
+          ].map(({ name, label }) => (
+            <div key={name} className="mt-3">
+              <label className="block text-[13px] font-semibold mb-1">{label}</label>
+              <Input.TextArea
+                name={name}
+                rows={2}
+                value={formik.values[name]}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+              />
+            </div>
+          ))}
 
-          <Form.Item className="mb-0">
-            <Button type="primary" htmlType="submit" block>Save Daily Report</Button>
-          </Form.Item>
-        </Form>
+          <Button type="primary" htmlType="submit" block className="mt-4" loading={formik.isSubmitting}>
+            Save Daily Report
+          </Button>
+        </form>
       </Modal>
     </div>
   );

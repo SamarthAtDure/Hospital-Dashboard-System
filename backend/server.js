@@ -497,12 +497,12 @@ app.delete("/departments/:id", async (req, res) => {
 });
 
 // ─── DAILY PATIENT REPORTS ──────────────────────────────
-// Add one daily report per patient per day
+// One daily report per patient per date per visit slot
 app.post("/daily-reports", async (req, res) => {
   const db = await connectDB();
-  const { patientId, date } = req.body;
-  const existing = await db.collection("dailyReports").findOne({ patientId, date });
-  if (existing) return res.status(409).json({ message: "A report for this patient on this date already exists." });
+  const { patientId, date, visitSlot } = req.body;
+  const existing = await db.collection("dailyReports").findOne({ patientId, date, visitSlot });
+  if (existing) return res.status(409).json({ message: `A ${visitSlot} report for this patient on ${date} already exists.` });
   const result = await db.collection("dailyReports").insertOne({ ...req.body, createdAt: new Date() });
   res.json({ message: "Daily report saved", id: result.insertedId });
 });

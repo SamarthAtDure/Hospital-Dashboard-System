@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { NotificationProvider } from "@context/NotificationContext";
 // import Layout from "./components/Layout";
 // import Login from "./pages/Login";
 // import Dashboard from "./pages/Dashboard";
@@ -37,6 +38,7 @@ function ProtectedRoute({ children, role }) {
 
 function App() {
   return (
+    <NotificationProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
@@ -63,6 +65,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
+    </NotificationProvider>
   );
 }
 

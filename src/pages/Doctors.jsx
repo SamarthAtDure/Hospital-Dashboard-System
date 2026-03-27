@@ -1,36 +1,101 @@
 import React, { useState } from "react";
 import { Table, Tag, Card, Popconfirm, message, Progress,
-         Button, Modal, Form, Input, Select, Skeleton, TimePicker, Checkbox } from "antd";
+         Button, Modal, Input, Select, Skeleton, TimePicker, Checkbox } from "antd";
 import dayjs from "dayjs";
-// import { useDoctors, isOnShift } from "../context/DoctorContext";
 import { useDoctors, isOnShift } from "@context/DoctorContext";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
-const availColor  = { Available: "green", Busy: "gold", "On Leave": "red" };
+const availColor   = { Available: "green", Busy: "gold", "On Leave": "red" };
 const expToPercent = (exp) => Math.min(Math.round((parseInt(exp) / 20) * 100), 100);
-const API = "http://localhost:5000";
+const API  = "http://localhost:5000";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DEPTS = ["Cardiology","Neurology","Orthopedics","Pediatrics","General","Dermatology","Radiology","Oncology"];
+
+// ── Yup schemas ───────────────────────────────────────────────────
+const addDoctorSchema = Yup.object({
+  name: Yup.string()
+    .trim()
+    .required("Name is required")
+    .min(2, "Name must be at least 2 characters")
+    .matches(/^[a-zA-Z\s]+$/, "Name must contain only letters and spaces"),
+  specialization: Yup.string()
+    .trim()
+    .required("Specialization is required")
+    .min(3, "Specialization must be at least 3 characters"),
+  department: Yup.string()
+    .required("Department is required"),
+  experience: Yup.number()
+    .typeError("Experience must be a number")
+    .required("Experience is required")
+    .min(0, "Experience cannot be negative")
+    .max(50, "Experience cannot exceed 50 years"),
+  availabilityStatus: Yup.string()
+    .required("Availability status is required"),
+});
+
+const hoursSchema = Yup.object({
+  start: Yup.string().nullable()
+    .test("start-required-if-end", "Shift start is required when end is set", function (val) {
+      return !this.parent.end || !!val;
+    }),
+  end: Yup.string().nullable()
+    .test("end-required-if-start", "Shift end is required when start is set", function (val) {
+      return !this.parent.start || !!val;
+    })
+    .test("end-after-start", "Shift end must be after shift start", function (val) {
+      const { start } = this.parent;
+      if (!start || !val) return true;
+      return dayjs(val, "HH:mm").isAfter(dayjs(start, "HH:mm"));
+    }),
+  days: Yup.array()
+    .test("days-required-if-hours", "Select at least 1 working day", function (val) {
+      const { start, end } = this.parent;
+      if (!start && !end) return true;
+      return val && val.length > 0;
+    }),
+});
 
 function Doctors() {
   const { doctors, loading, fetchDoctors, updateWorkingHours } = useDoctors();
 
   const [addOpen,   setAddOpen]   = useState(false);
   const [hoursOpen, setHoursOpen] = useState(false);
-  const [hoursDoc,  setHoursDoc]  = useState(null); // doctor being edited
-  const [addForm]   = Form.useForm();
-  const [hoursForm] = Form.useForm();
+  const [hoursDoc,  setHoursDoc]  = useState(null);
 
-  const handleAdd = async (values) => {
-    await fetch(`${API}/doctors`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, availabilityStatus: values.availabilityStatus || "Available" }),
-    });
-    message.success("Doctor added");
-    addForm.resetFields();
-    setAddOpen(false);
-    fetchDoctors();
-  };
+  // ── Add Doctor formik ─────────────────────────────────────────────
+  const addFormik = useFormik({
+    initialValues: { name: "", specialization: "", department: "", experience: "", availabilityStatus: "" },
+    validationSchema: addDoctorSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      await fetch(`${API}/doctors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, availabilityStatus: values.availabilityStatus || "Available" }),
+      });
+      message.success("Doctor added");
+      resetForm();
+      setAddOpen(false);
+      fetchDoctors();
+      setSubmitting(false);
+    },
+  });
+
+  // ── Working Hours formik ──────────────────────────────────────────
+  const hoursFormik = useFormik({
+    initialValues: { start: "", end: "", days: ["Mon","Tue","Wed","Thu","Fri"] },
+    validationSchema: hoursSchema,
+    onSubmit: async (values, { setSubmitting }) => {
+      await updateWorkingHours(hoursDoc._id, {
+        start: values.start || "",
+        end:   values.end   || "",
+        days:  values.days  || [],
+      });
+      message.success("Working hours saved.");
+      setHoursOpen(false);
+      setSubmitting(false);
+    },
+  });
 
   const handleDelete = async (id) => {
     await fetch(`${API}/doctors/${id}`, { method: "DELETE" });
@@ -41,23 +106,14 @@ function Doctors() {
   const openHours = (doc) => {
     setHoursDoc(doc);
     const wh = doc.workingHours;
-    hoursForm.setFieldsValue({
-      start: wh?.start ? dayjs(wh.start, "HH:mm") : null,
-      end:   wh?.end   ? dayjs(wh.end,   "HH:mm") : null,
-      days:  wh?.days  || ["Mon","Tue","Wed","Thu","Fri"],
+    hoursFormik.resetForm({
+      values: {
+        start: wh?.start || "",
+        end:   wh?.end   || "",
+        days:  wh?.days  || ["Mon","Tue","Wed","Thu","Fri"],
+      },
     });
     setHoursOpen(true);
-  };
-
-  const handleSaveHours = async (values) => {
-    const workingHours = {
-      start: values.start?.format("HH:mm") || "",
-      end:   values.end?.format("HH:mm")   || "",
-      days:  values.days || [],
-    };
-    await updateWorkingHours(hoursDoc._id, workingHours);
-    message.success("Working hours saved.");
-    setHoursOpen(false);
   };
 
   // ── Working hours display helper ──────────────────────────────────
@@ -78,7 +134,7 @@ function Doctors() {
 
   // ── Load bar helper ───────────────────────────────────────────────
   const LoadBar = ({ count }) => {
-    const pct = Math.min(count * 10, 100); // 10 patients = 100%
+    const pct = Math.min(count * 10, 100);
     const color = pct < 40 ? "#10b981" : pct < 70 ? "#f59e0b" : "#ef4444";
     return (
       <div className="flex items-center gap-2">
@@ -143,7 +199,7 @@ function Doctors() {
         <Button type="primary" onClick={() => setAddOpen(true)}>+ Add Doctor</Button>
       </div>
 
-      {/* Cards — skeleton while loading */}
+      {/* Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {loading
           ? Array.from({ length: 3 }).map((_, i) => (
@@ -172,8 +228,6 @@ function Doctors() {
                   {doc.specialization && <p className="text-xs text-slate-400 mt-0.5">{doc.specialization}</p>}
                   <p className="text-xs text-slate-400 mt-1 mb-1">Experience: {doc.experience}</p>
                   <Progress percent={expToPercent(doc.experience)} size="small" strokeColor="#2563eb" />
-
-                  {/* Working hours + shift status */}
                   {doc.workingHours?.start ? (
                     <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                       <span>{doc.workingHours.start} – {doc.workingHours.end}</span>
@@ -184,8 +238,6 @@ function Doctors() {
                   ) : (
                     <p className="text-xs text-slate-300 mt-2">No hours set</p>
                   )}
-
-                  {/* Load bar */}
                   <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
                     <span>Load:</span>
                     <Progress
@@ -207,7 +259,7 @@ function Doctors() {
         }
       </div>
 
-      {/* Table — skeleton while loading */}
+      {/* Table */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
         {loading
           ? <Skeleton active paragraph={{ rows: 6 }} />
@@ -216,29 +268,100 @@ function Doctors() {
       </div>
 
       {/* Add Doctor Modal */}
-      <Modal title="Add Doctor" open={addOpen} onCancel={() => setAddOpen(false)} footer={null}>
-        <Form form={addForm} layout="vertical" onFinish={handleAdd} className="mt-4">
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-            <Input placeholder="Enter doctor name" />
-          </Form.Item>
-          <Form.Item name="specialization" label="Specialization" rules={[{ required: true }]}>
-            <Input placeholder="e.g. Interventional Cardiology" />
-          </Form.Item>
-          <Form.Item name="department" label="Department" rules={[{ required: true }]}>
-            <Select placeholder="Select department" options={DEPTS.map((d) => ({ value: d, label: d }))} />
-          </Form.Item>
-          <Form.Item name="experience" label="Experience" rules={[{ required: true }]}>
-            <Input placeholder="e.g. 10 yrs" />
-          </Form.Item>
-          <Form.Item name="availabilityStatus" label="Availability" rules={[{ required: true }]}>
-            <Select placeholder="Select status" options={[
-              { value: "Available", label: "Available" },
-              { value: "Busy",      label: "Busy" },
-              { value: "On Leave",  label: "On Leave" },
-            ]} />
-          </Form.Item>
-          <Form.Item><Button type="primary" htmlType="submit" block>Add Doctor</Button></Form.Item>
-        </Form>
+      <Modal
+        title="Add Doctor"
+        open={addOpen}
+        onCancel={() => { setAddOpen(false); addFormik.resetForm(); }}
+        footer={null}
+      >
+        <form onSubmit={addFormik.handleSubmit} noValidate className="mt-4">
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Name</label>
+            <Input
+              name="name"
+              placeholder="Enter doctor name"
+              value={addFormik.values.name}
+              onChange={addFormik.handleChange}
+              onBlur={addFormik.handleBlur}
+              status={addFormik.touched.name && addFormik.errors.name ? "error" : ""}
+            />
+            {addFormik.touched.name && addFormik.errors.name && (
+              <p className="text-red-500 text-xs mt-1">{addFormik.errors.name}</p>
+            )}
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Specialization</label>
+            <Input
+              name="specialization"
+              placeholder="e.g. Interventional Cardiology"
+              value={addFormik.values.specialization}
+              onChange={addFormik.handleChange}
+              onBlur={addFormik.handleBlur}
+              status={addFormik.touched.specialization && addFormik.errors.specialization ? "error" : ""}
+            />
+            {addFormik.touched.specialization && addFormik.errors.specialization && (
+              <p className="text-red-500 text-xs mt-1">{addFormik.errors.specialization}</p>
+            )}
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Department</label>
+            <Select
+              className="w-full"
+              placeholder="Select department"
+              value={addFormik.values.department || undefined}
+              onChange={(val) => addFormik.setFieldValue("department", val)}
+              onBlur={() => addFormik.setFieldTouched("department", true)}
+              status={addFormik.touched.department && addFormik.errors.department ? "error" : ""}
+              options={DEPTS.map((d) => ({ value: d, label: d }))}
+            />
+            {addFormik.touched.department && addFormik.errors.department && (
+              <p className="text-red-500 text-xs mt-1">{addFormik.errors.department}</p>
+            )}
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Experience (years)</label>
+            <Input
+              name="experience"
+              type="number"
+              placeholder="e.g. 10"
+              value={addFormik.values.experience}
+              onChange={addFormik.handleChange}
+              onBlur={addFormik.handleBlur}
+              status={addFormik.touched.experience && addFormik.errors.experience ? "error" : ""}
+            />
+            {addFormik.touched.experience && addFormik.errors.experience && (
+              <p className="text-red-500 text-xs mt-1">{addFormik.errors.experience}</p>
+            )}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold mb-1">Availability</label>
+            <Select
+              className="w-full"
+              placeholder="Select status"
+              value={addFormik.values.availabilityStatus || undefined}
+              onChange={(val) => addFormik.setFieldValue("availabilityStatus", val)}
+              onBlur={() => addFormik.setFieldTouched("availabilityStatus", true)}
+              status={addFormik.touched.availabilityStatus && addFormik.errors.availabilityStatus ? "error" : ""}
+              options={[
+                { value: "Available", label: "Available" },
+                { value: "Busy",      label: "Busy" },
+                { value: "On Leave",  label: "On Leave" },
+              ]}
+            />
+            {addFormik.touched.availabilityStatus && addFormik.errors.availabilityStatus && (
+              <p className="text-red-500 text-xs mt-1">{addFormik.errors.availabilityStatus}</p>
+            )}
+          </div>
+
+          <Button type="primary" htmlType="submit" block loading={addFormik.isSubmitting}>
+            Add Doctor
+          </Button>
+        </form>
       </Modal>
 
       {/* Set Working Hours Modal */}
@@ -248,22 +371,58 @@ function Doctors() {
         onCancel={() => setHoursOpen(false)}
         footer={null}
       >
-        <Form form={hoursForm} layout="vertical" onFinish={handleSaveHours} className="mt-4">
+        <form onSubmit={hoursFormik.handleSubmit} noValidate className="mt-4">
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="start" label="Shift Start">
-              <TimePicker format="HH:mm" className="w-full" minuteStep={15} />
-            </Form.Item>
-            <Form.Item name="end" label="Shift End">
-              <TimePicker format="HH:mm" className="w-full" minuteStep={15} />
-            </Form.Item>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Shift Start</label>
+              <TimePicker
+                format="HH:mm"
+                className="w-full"
+                minuteStep={15}
+                value={hoursFormik.values.start ? dayjs(hoursFormik.values.start, "HH:mm") : null}
+                onChange={(t) => hoursFormik.setFieldValue("start", t ? t.format("HH:mm") : "")}
+                onBlur={() => hoursFormik.setFieldTouched("start", true)}
+                status={hoursFormik.touched.start && hoursFormik.errors.start ? "error" : ""}
+              />
+              {hoursFormik.touched.start && hoursFormik.errors.start && (
+                <p className="text-red-500 text-xs mt-1">{hoursFormik.errors.start}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Shift End</label>
+              <TimePicker
+                format="HH:mm"
+                className="w-full"
+                minuteStep={15}
+                value={hoursFormik.values.end ? dayjs(hoursFormik.values.end, "HH:mm") : null}
+                onChange={(t) => hoursFormik.setFieldValue("end", t ? t.format("HH:mm") : "")}
+                onBlur={() => hoursFormik.setFieldTouched("end", true)}
+                status={hoursFormik.touched.end && hoursFormik.errors.end ? "error" : ""}
+              />
+              {hoursFormik.touched.end && hoursFormik.errors.end && (
+                <p className="text-red-500 text-xs mt-1">{hoursFormik.errors.end}</p>
+              )}
+            </div>
           </div>
-          <Form.Item name="days" label="Working Days">
-            <Checkbox.Group options={DAYS} />
-          </Form.Item>
-          <Form.Item className="mb-0">
-            <Button type="primary" htmlType="submit" block>Save Working Hours</Button>
-          </Form.Item>
-        </Form>
+
+          <div className="mt-3 mb-4">
+            <label className="block text-[13px] font-semibold mb-2">Working Days</label>
+            <Checkbox.Group
+              options={DAYS}
+              value={hoursFormik.values.days}
+              onChange={(val) => hoursFormik.setFieldValue("days", val)}
+            />
+            {hoursFormik.touched.days && hoursFormik.errors.days && (
+              <p className="text-red-500 text-xs mt-1">{hoursFormik.errors.days}</p>
+            )}
+          </div>
+
+          <Button type="primary" htmlType="submit" block loading={hoursFormik.isSubmitting}>
+            Save Working Hours
+          </Button>
+        </form>
       </Modal>
     </div>
   );

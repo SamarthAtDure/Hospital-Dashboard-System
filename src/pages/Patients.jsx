@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Table, Tag, Drawer, Button, Modal, Form, Input, Select,
+import { Table, Tag, Drawer, Button, Modal, Input, Select,
          Popconfirm, message, DatePicker, Descriptions, Empty, Alert } from "antd";
-// import { useDoctors, pickBestDoctor, isOnShift } from "../context/DoctorContext";
 import { useDoctors, pickBestDoctor, isOnShift } from "@context/DoctorContext";
+import { useNotifications } from "@context/NotificationContext";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import dayjs from "dayjs";
 
 const API = "http://localhost:5000";
 const DEPARTMENTS = ["Cardiology","Neurology","Orthopedics","Pediatrics","General","Dermatology","Radiology","Oncology"];
@@ -53,6 +56,7 @@ function ReportPrint({ report: r }) {
 
 function Patients() {
   const { doctors: contextDoctors } = useDoctors();
+  const { pushNotif } = useNotifications();
 
   const [patients,      setPatients]      = useState([]);
   const [doctors,       setDoctors]       = useState([]);
@@ -61,13 +65,78 @@ function Patients() {
   const [reportPatient, setReportPatient] = useState(null);
   const [report,        setReport]        = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [suggested,     setSuggested]     = useState(null); // round-robin suggestion
-  const [form] = Form.useForm();
+  const [suggested,     setSuggested]     = useState(null);
+  const [formDept,     setFormDept]     = useState(null);
 
   const [search,       setSearch]       = useState("");
   const [deptFilter,   setDeptFilter]   = useState(null);
   const [doctorFilter, setDoctorFilter] = useState(null);
-  const [formDept,     setFormDept]     = useState(null);
+
+  // ── Yup schema ────────────────────────────────────────────────────
+  const patientSchema = Yup.object({
+    name: Yup.string()
+      .trim()
+      .required("Patient name is required")
+      .min(2, "Name must be at least 2 characters")
+      .matches(/^[a-zA-Z\s]+$/, "Name must contain only letters and spaces"),
+    age: Yup.number()
+      .typeError("Age must be a number")
+      .required("Age is required")
+      .min(0, "Age cannot be negative")
+      .max(150, "Age cannot exceed 150"),
+    gender: Yup.string()
+      .required("Gender is required"),
+    phone: Yup.string()
+      .required("Phone number is required")
+      .matches(/^\d{10}$/, "Phone must be exactly 10 digits"),
+    disease: Yup.string()
+      .trim()
+      .required("Disease / Diagnosis is required")
+      .min(3, "Must be at least 3 characters"),
+    department: Yup.string()
+      .required("Department is required"),
+    doctorId: Yup.string()
+      .required("Please assign a doctor"),
+    admissionDate: Yup.date()
+      .typeError("Select a valid date")
+      .required("Admission date is required")
+      .min(dayjs().subtract(1, "year").toDate(), "Date cannot be more than 1 year in the past")
+      .max(dayjs().add(7, "day").toDate(), "Date cannot be more than 7 days in the future"),
+  });
+
+  // ── Formik ────────────────────────────────────────────────────────
+  const formik = useFormik({
+    initialValues: {
+      name: "", age: "", gender: "", phone: "",
+      disease: "", department: "", doctorId: "", admissionDate: null,
+    },
+    validationSchema: patientSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      const res = await fetch(`${API}/patients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: values.name, age: values.age, gender: values.gender,
+          phone: values.phone, disease: values.disease,
+          department: values.department, doctorId: values.doctorId,
+          admissionDate: values.admissionDate ? dayjs(values.admissionDate).format("YYYY-MM-DD") : "",
+        }),
+      });
+      if (res.ok) {
+        // notify the assigned doctor
+        const assignedDoc = doctors.find((d) => d._id?.toString() === values.doctorId);
+        if (assignedDoc) {
+          pushNotif(assignedDoc._id.toString(), `New patient assigned: ${values.name} (${values.disease}, ${values.department})`);
+        }
+        message.success("Patient added and request sent to doctor.");
+        resetForm(); setFormDept(null); setSuggested(null); setOpen(false);
+        fetchAll();
+      } else {
+        message.error("Failed to add patient.");
+      }
+      setSubmitting(false);
+    },
+  });
 
   const fetchAll = async () => {
     const [p, d] = await Promise.all([
@@ -94,13 +163,14 @@ function Patients() {
   // ── Round-robin: when dept selected, auto-pick best doctor ────────
   const handleDeptChange = (val) => {
     setFormDept(val);
-    form.setFieldValue("doctorId", undefined);
+    formik.setFieldValue("department", val || "");
+    formik.setFieldValue("doctorId", "");
     setSuggested(null);
     if (!val) return;
     const best = pickBestDoctor(contextDoctors, val);
     if (best) {
       setSuggested(best);
-      form.setFieldValue("doctorId", best._id?.toString());
+      formik.setFieldValue("doctorId", best._id?.toString());
     }
   };
 
@@ -128,26 +198,7 @@ function Patients() {
     setTimeout(() => { w.print(); w.close(); }, 400);
   };
 
-  // ── Add patient ───────────────────────────────────────────────────
-  const handleAdd = async (values) => {
-    const res = await fetch(`${API}/patients`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: values.name, age: values.age, gender: values.gender,
-        phone: values.phone, disease: values.disease,
-        department: values.department, doctorId: values.doctorId,
-        admissionDate: values.admissionDate?.format("YYYY-MM-DD"),
-      }),
-    });
-    if (res.ok) {
-      message.success("Patient added and request sent to doctor.");
-      form.resetFields(); setFormDept(null); setSuggested(null); setOpen(false);
-      fetchAll();
-    } else {
-      message.error("Failed to add patient.");
-    }
-  };
+
 
   const handleDelete = async (id) => {
     await fetch(`${API}/patients/${id}`, { method: "DELETE" });
@@ -294,47 +345,133 @@ function Patients() {
       </Drawer>
 
       {/* Add Patient Modal */}
-      <Modal title="Add Patient" open={open}
-        onCancel={() => { setOpen(false); form.resetFields(); setFormDept(null); setSuggested(null); }}
-        footer={null} width={560}
+      <Modal
+        title="Add Patient"
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          formik.resetForm();
+          setFormDept(null);
+          setSuggested(null);
+        }}
+        footer={null}
+        width={560}
       >
-        <Form form={form} layout="vertical" onFinish={handleAdd} className="mt-4">
+        <form onSubmit={formik.handleSubmit} noValidate className="mt-4">
+
+          {/* Name + Age */}
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="name" label="Patient Name" rules={[{ required: true }]}>
-              <Input placeholder="Full name" />
-            </Form.Item>
-            <Form.Item name="age" label="Age" rules={[{ required: true }]}>
-              <Input type="number" placeholder="Age" />
-            </Form.Item>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="gender" label="Gender" rules={[{ required: true }]}>
-              <Select placeholder="Select gender" options={[
-                { value: "Male", label: "Male" },
-                { value: "Female", label: "Female" },
-                { value: "Other", label: "Other" },
-              ]} />
-            </Form.Item>
-            <Form.Item name="phone" label="Phone" rules={[{ required: true }]}>
-              <Input placeholder="+1 234 567 8900" />
-            </Form.Item>
-          </div>
-          <Form.Item name="disease" label="Disease / Diagnosis" rules={[{ required: true }]}>
-            <Input placeholder="e.g. Hypertension, Fracture..." />
-          </Form.Item>
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="department" label="Department" rules={[{ required: true }]}>
-              <Select
-                placeholder="Select department"
-                options={DEPARTMENTS.map((d) => ({ value: d, label: d }))}
-                onChange={handleDeptChange}
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Patient Name</label>
+              <Input
+                name="name"
+                placeholder="Full name"
+                value={formik.values.name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.name && formik.errors.name ? "error" : ""}
               />
-            </Form.Item>
-            <Form.Item name="doctorId" label="Assign Doctor" rules={[{ required: true }]}>
+              {formik.touched.name && formik.errors.name && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.name}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Age</label>
+              <Input
+                name="age"
+                type="number"
+                placeholder="Age"
+                value={formik.values.age}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.age && formik.errors.age ? "error" : ""}
+              />
+              {formik.touched.age && formik.errors.age && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.age}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Gender + Phone */}
+          <div className="grid grid-cols-2 gap-4 mt-3">
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Gender</label>
               <Select
+                className="w-full"
+                placeholder="Select gender"
+                value={formik.values.gender || undefined}
+                onChange={(val) => formik.setFieldValue("gender", val)}
+                onBlur={() => formik.setFieldTouched("gender", true)}
+                status={formik.touched.gender && formik.errors.gender ? "error" : ""}
+                options={[
+                  { value: "Male", label: "Male" },
+                  { value: "Female", label: "Female" },
+                  { value: "Other", label: "Other" },
+                ]}
+              />
+              {formik.touched.gender && formik.errors.gender && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.gender}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Phone</label>
+              <Input
+                name="phone"
+                placeholder="9876543210"
+                value={formik.values.phone}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                status={formik.touched.phone && formik.errors.phone ? "error" : ""}
+              />
+              {formik.touched.phone && formik.errors.phone && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.phone}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Disease */}
+          <div className="mt-3">
+            <label className="block text-[13px] font-semibold mb-1">Disease / Diagnosis</label>
+            <Input
+              name="disease"
+              placeholder="e.g. Hypertension, Fracture..."
+              value={formik.values.disease}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              status={formik.touched.disease && formik.errors.disease ? "error" : ""}
+            />
+            {formik.touched.disease && formik.errors.disease && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.disease}</p>
+            )}
+          </div>
+
+          {/* Department + Doctor */}
+          <div className="grid grid-cols-2 gap-4 mt-3">
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Department</label>
+              <Select
+                className="w-full"
+                placeholder="Select department"
+                value={formik.values.department || undefined}
+                onChange={handleDeptChange}
+                onBlur={() => formik.setFieldTouched("department", true)}
+                status={formik.touched.department && formik.errors.department ? "error" : ""}
+                options={DEPARTMENTS.map((d) => ({ value: d, label: d }))}
+              />
+              {formik.touched.department && formik.errors.department && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.department}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold mb-1">Assign Doctor</label>
+              <Select
+                className="w-full"
                 placeholder={formDept ? "Select doctor" : "Select department first"}
                 disabled={!formDept}
-                onChange={() => setSuggested(null)}
+                value={formik.values.doctorId || undefined}
+                onChange={(val) => { formik.setFieldValue("doctorId", val); setSuggested(null); }}
+                onBlur={() => formik.setFieldTouched("doctorId", true)}
+                status={formik.touched.doctorId && formik.errors.doctorId ? "error" : ""}
                 options={filteredDoctors.map((d) => {
                   const on = isOnShift(d);
                   return {
@@ -355,15 +492,15 @@ function Patients() {
                   };
                 })}
               />
-            </Form.Item>
+              {formik.touched.doctorId && formik.errors.doctorId && (
+                <p className="text-red-500 text-xs mt-1">{formik.errors.doctorId}</p>
+              )}
+            </div>
           </div>
 
-          {/* Round-robin suggestion banner */}
+          {/* Round-robin suggestion banners */}
           {suggested && (
-            <Alert
-              type="info"
-              showIcon
-              className="mb-3"
+            <Alert type="info" showIcon className="mt-3"
               message={
                 <span className="text-xs">
                   Auto-assigned <strong>{suggested.name}</strong> — lowest load
@@ -375,17 +512,41 @@ function Patients() {
             />
           )}
           {formDept && !suggested && (
-            <Alert type="warning" showIcon className="mb-3"
+            <Alert type="warning" showIcon className="mt-3"
               message={<span className="text-xs">No available doctor on shift for this department. Please assign manually.</span>} />
           )}
 
-          <Form.Item name="admissionDate" label="Admission Date" rules={[{ required: true }]}>
-            <DatePicker className="w-full" />
-          </Form.Item>
-          <Form.Item className="mb-0">
-            <Button type="primary" htmlType="submit" block>Add Patient & Send Request</Button>
-          </Form.Item>
-        </Form>
+          {/* Admission Date */}
+          <div className="mt-3">
+            <label className="block text-[13px] font-semibold mb-1">Admission Date</label>
+            <DatePicker
+              className="w-full"
+              value={formik.values.admissionDate ? dayjs(formik.values.admissionDate) : null}
+              onChange={(date) => formik.setFieldValue("admissionDate", date ? date.toDate() : null)}
+              onBlur={() => formik.setFieldTouched("admissionDate", true)}
+              status={formik.touched.admissionDate && formik.errors.admissionDate ? "error" : ""}
+              disabledDate={(current) =>
+                current && (
+                  current < dayjs().subtract(1, "year").startOf("day") ||
+                  current > dayjs().add(7, "day").endOf("day")
+                )
+              }
+            />
+            {formik.touched.admissionDate && formik.errors.admissionDate && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.admissionDate}</p>
+            )}
+          </div>
+
+          <Button
+            type="primary"
+            htmlType="submit"
+            block
+            className="mt-4"
+            loading={formik.isSubmitting}
+          >
+            Add Patient & Send Request
+          </Button>
+        </form>
       </Modal>
     </div>
   );

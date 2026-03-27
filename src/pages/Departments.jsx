@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Modal, Form, Input, Popconfirm, message, Skeleton, Tag, Avatar, Tooltip } from "antd";
+import { Button, Modal, Input, Popconfirm, message, Skeleton, Tag, Avatar, Tooltip } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 
 const API          = "http://localhost:5000";
 const REFRESH_MS   = 1 * 60 * 1000; // 5 minutes
@@ -12,10 +14,47 @@ function Departments() {
   const [refreshing,  setRefreshing]  = useState(false); // silent bg refresh indicator
   const [lastUpdated, setLastUpdated] = useState(null);  // Date object
   const [selected,    setSelected]    = useState(null);
-  const [modalOpen,   setModalOpen]   = useState(false);
-  const [editing,     setEditing]     = useState(null);
-  const [form] = Form.useForm();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing,   setEditing]   = useState(null);
   const timerRef = useRef(null);
+
+  // ── Yup schema ────────────────────────────────────────────────────
+  const deptSchema = Yup.object({
+    name: Yup.string()
+      .trim()
+      .required("Department name is required")
+      .min(2, "Name must be at least 2 characters")
+      .matches(/^[a-zA-Z0-9\s]+$/, "Name must not contain special characters"),
+    description: Yup.string()
+      .max(300, "Description cannot exceed 300 characters"),
+  });
+
+  // ── Formik ────────────────────────────────────────────────────────
+  const formik = useFormik({
+    initialValues: { name: "", description: "" },
+    validationSchema: deptSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      if (editing) {
+        await fetch(`${API}/departments/${editing._id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+        message.success("Department updated");
+      } else {
+        await fetch(`${API}/departments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(values),
+        });
+        message.success("Department added");
+      }
+      resetForm();
+      setModalOpen(false);
+      fetchDepts(true);
+      setSubmitting(false);
+    },
+  });
 
   // silent=true → no full-page skeleton, just a small spinner in the header
   const fetchDepts = (silent = false) => {
@@ -47,33 +86,17 @@ function Departments() {
     date ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
 
   // ── CRUD ──────────────────────────────────────────────────────────
-  const openAdd = () => { setEditing(null); form.resetFields(); setModalOpen(true); };
+  const openAdd = () => {
+    setEditing(null);
+    formik.resetForm({ values: { name: "", description: "" } });
+    setModalOpen(true);
+  };
 
   const openEdit = (dept, e) => {
     e.stopPropagation();
     setEditing(dept);
-    form.setFieldsValue({ name: dept.name, description: dept.description });
+    formik.resetForm({ values: { name: dept.name, description: dept.description || "" } });
     setModalOpen(true);
-  };
-
-  const handleSubmit = async (values) => {
-    if (editing) {
-      await fetch(`${API}/departments/${editing._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      message.success("Department updated");
-    } else {
-      await fetch(`${API}/departments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      message.success("Department added");
-    }
-    setModalOpen(false);
-    fetchDepts(true);
   };
 
   const handleDelete = async (dept, e) => {
@@ -296,22 +319,56 @@ function Departments() {
       <Modal
         title={editing ? "Edit Department" : "Add Department"}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { setModalOpen(false); formik.resetForm(); }}
         footer={null}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-4">
-          <Form.Item name="name" label="Department Name" rules={[{ required: true, message: "Name is required" }]}>
-            <Input placeholder="e.g. Cardiology" disabled={!!editing} />
-          </Form.Item>
-          <Form.Item name="description" label="Description">
-            <Input.TextArea rows={3} placeholder="Brief description (optional)" />
-          </Form.Item>
-          <Form.Item className="mb-0">
-            <Button type="primary" htmlType="submit" block>
-              {editing ? "Update Department" : "Add Department"}
-            </Button>
-          </Form.Item>
-        </Form>
+        <form onSubmit={formik.handleSubmit} noValidate className="mt-4">
+
+          {/* Department Name */}
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Department Name</label>
+            <Input
+              name="name"
+              placeholder="e.g. Cardiology"
+              disabled={!!editing}
+              value={formik.values.name}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              status={formik.touched.name && formik.errors.name ? "error" : ""}
+            />
+            {formik.touched.name && formik.errors.name && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.name}</p>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold mb-1">
+              Description <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <Input.TextArea
+              name="description"
+              rows={3}
+              placeholder="Brief description (optional)"
+              value={formik.values.description}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              status={formik.touched.description && formik.errors.description ? "error" : ""}
+            />
+            <div className="flex justify-between items-center mt-1">
+              {formik.touched.description && formik.errors.description
+                ? <p className="text-red-500 text-xs">{formik.errors.description}</p>
+                : <span />}
+              <span className="text-xs text-slate-400 ml-auto">
+                {(formik.values.description || "").length}/300
+              </span>
+            </div>
+          </div>
+
+          <Button type="primary" htmlType="submit" block loading={formik.isSubmitting}>
+            {editing ? "Update Department" : "Add Department"}
+          </Button>
+        </form>
       </Modal>
     </div>
   );

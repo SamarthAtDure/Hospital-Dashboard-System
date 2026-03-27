@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Table, Tag, Button, Input, Form, Select, DatePicker, TimePicker, Modal, notification, Popconfirm } from "antd";
+import { Table, Tag, Button, Input, Select, DatePicker, TimePicker, Modal, notification, Popconfirm } from "antd";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import dayjs from "dayjs";
 
 const API = "http://localhost:5000";
 const statusColor = { Confirmed: "green", Pending: "gold", Cancelled: "red" };
@@ -7,8 +10,50 @@ const statusColor = { Confirmed: "green", Pending: "gold", Cancelled: "red" };
 function Appointments() {
   const [appointments, setAppointments] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form] = Form.useForm();
   const [api, contextHolder] = notification.useNotification();
+
+  const appointmentSchema = Yup.object({
+    patient: Yup.string()
+      .trim()
+      .required("Patient name is required")
+      .min(2, "Name must be at least 2 characters"),
+    department: Yup.string()
+      .required("Department is required"),
+    date: Yup.date()
+      .typeError("Select a valid date")
+      .required("Date is required")
+      .min(dayjs().startOf("day").toDate(), "Date cannot be in the past"),
+    time: Yup.string()
+      .required("Time is required"),
+  });
+
+  const formik = useFormik({
+    initialValues: { patient: "", department: "", date: null, time: null },
+    validationSchema: appointmentSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      await fetch(`${API}/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patient: values.patient,
+          department: values.department,
+          date: dayjs(values.date).format("YYYY-MM-DD"),
+          time: dayjs(values.time).format("HH:mm"),
+          status: "Pending",
+        }),
+      });
+      resetForm();
+      setOpen(false);
+      fetchAppointments();
+      api.success({
+        message: "Appointment Booked",
+        description: `${values.patient} scheduled for ${values.department} on ${dayjs(values.date).format("MMM D, YYYY")} at ${dayjs(values.time).format("HH:mm")}.`,
+        placement: "topRight",
+        duration: 4,
+      });
+      setSubmitting(false);
+    },
+  });
 
   const fetchAppointments = async () => {
     const data = await fetch(`${API}/appointments`).then((r) => r.json());
@@ -17,28 +62,7 @@ function Appointments() {
 
   useEffect(() => { fetchAppointments(); }, []);
 
-  const handleSubmit = async (values) => {
-    await fetch(`${API}/appointments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patient: values.patient,
-        department: values.department,
-        date: values.date.format("YYYY-MM-DD"),
-        time: values.time.format("HH:mm"),
-        status: "Pending",
-      }),
-    });
-    form.resetFields();
-    setOpen(false);
-    fetchAppointments();
-    api.success({
-      message: "Appointment Booked",
-      description: `${values.patient} scheduled for ${values.department} on ${values.date.format("MMM D, YYYY")} at ${values.time.format("HH:mm")}.`,
-      placement: "topRight",
-      duration: 4,
-    });
-  };
+
 
   const updateStatus = async (id, status) => {
     await fetch(`${API}/appointments/${id}`, {
@@ -104,30 +128,89 @@ function Appointments() {
         <Table columns={columns} dataSource={appointments} rowKey="_id" pagination={{ pageSize: 8 }} />
       </div>
 
-      <Modal title="Book Appointment" open={open} onCancel={() => setOpen(false)} footer={null}>
-        <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-4">
-          <Form.Item name="patient" label="Patient Name" rules={[{ required: true }]}>
-            <Input placeholder="Enter patient name" />
-          </Form.Item>
-          <Form.Item name="department" label="Department" rules={[{ required: true }]}>
-            <Select placeholder="Select department" options={[
-              { value: "Cardiology", label: "Cardiology" },
-              { value: "Neurology", label: "Neurology" },
-              { value: "Orthopedics", label: "Orthopedics" },
-              { value: "Pediatrics", label: "Pediatrics" },
-              { value: "General", label: "General" },
-            ]} />
-          </Form.Item>
-          <Form.Item name="date" label="Date" rules={[{ required: true }]}>
-            <DatePicker className="w-full" />
-          </Form.Item>
-          <Form.Item name="time" label="Time" rules={[{ required: true }]}>
-            <TimePicker className="w-full" format="HH:mm" />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" block>Confirm Booking</Button>
-          </Form.Item>
-        </Form>
+      <Modal
+        title="Book Appointment"
+        open={open}
+        onCancel={() => { setOpen(false); formik.resetForm(); }}
+        footer={null}
+      >
+        <form onSubmit={formik.handleSubmit} noValidate className="mt-4">
+
+          {/* Patient Name */}
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Patient Name</label>
+            <Input
+              name="patient"
+              placeholder="Enter patient name"
+              value={formik.values.patient}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              status={formik.touched.patient && formik.errors.patient ? "error" : ""}
+            />
+            {formik.touched.patient && formik.errors.patient && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.patient}</p>
+            )}
+          </div>
+
+          {/* Department */}
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Department</label>
+            <Select
+              className="w-full"
+              placeholder="Select department"
+              value={formik.values.department || undefined}
+              onChange={(val) => formik.setFieldValue("department", val)}
+              onBlur={() => formik.setFieldTouched("department", true)}
+              status={formik.touched.department && formik.errors.department ? "error" : ""}
+              options={[
+                { value: "Cardiology", label: "Cardiology" },
+                { value: "Neurology", label: "Neurology" },
+                { value: "Orthopedics", label: "Orthopedics" },
+                { value: "Pediatrics", label: "Pediatrics" },
+                { value: "General", label: "General" },
+              ]}
+            />
+            {formik.touched.department && formik.errors.department && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.department}</p>
+            )}
+          </div>
+
+          {/* Date */}
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Date</label>
+            <DatePicker
+              className="w-full"
+              value={formik.values.date ? dayjs(formik.values.date) : null}
+              onChange={(date) => formik.setFieldValue("date", date ? date.toDate() : null)}
+              onBlur={() => formik.setFieldTouched("date", true)}
+              status={formik.touched.date && formik.errors.date ? "error" : ""}
+              disabledDate={(current) => current && current < dayjs().startOf("day")}
+            />
+            {formik.touched.date && formik.errors.date && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.date}</p>
+            )}
+          </div>
+
+          {/* Time */}
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold mb-1">Time</label>
+            <TimePicker
+              className="w-full"
+              format="HH:mm"
+              value={formik.values.time ? dayjs(formik.values.time) : null}
+              onChange={(time) => formik.setFieldValue("time", time ? time.toDate() : null)}
+              onBlur={() => formik.setFieldTouched("time", true)}
+              status={formik.touched.time && formik.errors.time ? "error" : ""}
+            />
+            {formik.touched.time && formik.errors.time && (
+              <p className="text-red-500 text-xs mt-1">{formik.errors.time}</p>
+            )}
+          </div>
+
+          <Button type="primary" htmlType="submit" block loading={formik.isSubmitting}>
+            Confirm Booking
+          </Button>
+        </form>
       </Modal>
     </div>
   );
