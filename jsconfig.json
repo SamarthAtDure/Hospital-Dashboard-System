@@ -6,6 +6,7 @@
       "@components/*": ["src/components/*"],
       "@pages/*":      ["src/pages/*"],
       "@context/*":    ["src/context/*"],
+      "@store/*":       ["src/store/*"],
       "@data/*":       ["src/data/*"],
       "@charts/*":     ["src/components/charts/*"]
     }

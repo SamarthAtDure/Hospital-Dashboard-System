@@ -1,72 +1,25 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Table, Tag, Drawer, Modal, Input,
-         DatePicker, message, Button, Popconfirm, Tabs, Badge } from "antd";
-import { useFormik } from "formik";
-import * as Yup from "yup";
-import dayjs from "dayjs";
-import { useNotifications } from "@context/NotificationContext";
+import { Table, Tag, Modal, Input, Button, Popconfirm, Tabs, Badge, App } from "antd";
+import { useDispatch, useSelector } from "react-redux";
+import { pushNotif as pushNotifAction, setPendingRequestCount } from "@store/notificationSlice";
 
 const API = "http://localhost:5000";
 const patientStatusColor = { Admitted: "gold", "In Operation": "red", Discharged: "green" };
 const reqStatusColor     = { Pending: "gold", Accepted: "green", Rejected: "red" };
 
 function DoctorPatients() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const { message } = App.useApp();
+  const user = useSelector((state) => state.auth.user) || {};
   const navigate = useNavigate();
-  const { pushNotif } = useNotifications();
+  const dispatch = useDispatch();
+  const pushNotif = (target, msg) => dispatch(pushNotifAction({ target, message: msg }));
 
-  const [patients,        setPatients]        = useState([]);
-  const [requests,        setRequests]        = useState([]);
-  const [selected,        setSelected]        = useState(null);
-  const [dischargeTarget, setDischargeTarget] = useState(null);
-  const [notesTarget,     setNotesTarget]     = useState(null);
-  const [notesValue,      setNotesValue]      = useState("");
-
-  // ── Yup schema ────────────────────────────────────────────────────
-  const dischargeSchema = Yup.object({
-    medicines: Yup.string()
-      .trim()
-      .required("Medicines prescribed is required")
-      .max(500, "Cannot exceed 500 characters"),
-    notes: Yup.string()
-      .trim()
-      .required("Home care instructions are required")
-      .max(500, "Cannot exceed 500 characters"),
-    followUpDate: Yup.date()
-      .nullable()
-      .typeError("Select a valid date")
-      .min(dayjs().startOf("day").toDate(), "Follow-up date must be today or in the future"),
-  });
-
-  // ── Discharge formik ──────────────────────────────────────────────
-  const dischargeFormik = useFormik({
-    initialValues: { medicines: "", notes: "", followUpDate: null },
-    validationSchema: dischargeSchema,
-    onSubmit: async (values, { setSubmitting, resetForm }) => {
-      await fetch(`${API}/reports`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId:    dischargeTarget._id,
-          doctorId:     user.id,
-          patientName:  dischargeTarget.name    || "",
-          doctorName:   user.name               || "",
-          diagnosis:    dischargeTarget.disease || "",
-          medicines:    values.medicines,
-          notes:        values.notes,
-          followUpDate: values.followUpDate
-            ? dayjs(values.followUpDate).format("YYYY-MM-DD")
-            : "",
-        }),
-      });
-      message.success("Discharge report saved.");
-      resetForm();
-      setDischargeTarget(null);
-      fetchPatients();
-      setSubmitting(false);
-    },
-  });
+  const [patients,    setPatients]    = useState([]);
+  const [requests,    setRequests]    = useState([]);
+  const [notesTarget, setNotesTarget] = useState(null);
+  const [notesValue,  setNotesValue]  = useState("");
+  const [activeTab,   setActiveTab]   = useState("requests");
 
   const fetchPatients = useCallback(() =>
     fetch(`${API}/doctor/${user.id}/patients`)
@@ -78,11 +31,13 @@ function DoctorPatients() {
   const fetchRequests = useCallback(() =>
     fetch(`${API}/doctor/${user.id}/patient-requests`)
       .then((r) => r.json())
-      .then((data) =>
-        setRequests(data.map((r) => ({ ...r, _id: r._id?.toString?.() ?? String(r._id) })))
-      )
+      .then((data) => {
+        const normalized = data.map((r) => ({ ...r, _id: r._id?.toString?.() ?? String(r._id) }));
+        setRequests(normalized);
+        dispatch(setPendingRequestCount(normalized.filter((r) => r.status === "Pending").length));
+      })
       .catch(() => {}),
-  [user.id]);
+  [user.id, dispatch]);
 
   useEffect(() => {
     fetchPatients();
@@ -91,11 +46,25 @@ function DoctorPatients() {
 
   // ── Accept / Reject ───────────────────────────────────────────────
   const handleAccept = async (reqId) => {
+    const req = requests.find((r) => r._id === reqId);
     const res = await fetch(`${API}/patient-requests/${reqId}/accept`, { method: "PATCH" });
     if (res.ok) {
+      // move the matching appointment to "In Work"
+      if (req?.patient?.name) {
+        const appts = await fetch(`${API}/doctor/${user.id}/appointments`).then((r) => r.json()).catch(() => []);
+        const match = appts.find((a) => a.patient === req.patient.name && a.status !== "Completed");
+        if (match) {
+          await fetch(`${API}/appointments/${match._id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "In Work" }),
+          });
+        }
+      }
       message.success("Patient accepted and admitted.");
-      fetchPatients();
+      await fetchPatients();
       fetchRequests();
+      setActiveTab("patients");
     } else {
       message.error("Failed to accept patient.");
     }
@@ -113,29 +82,6 @@ function DoctorPatients() {
       fetchRequests();
     } else {
       message.error("Failed to reject.");
-    }
-  };
-
-  // ── Patient Status buttons ────────────────────────────────────────
-  const handleStatusChange = async (patientId, newStatus, patient, e) => {
-    e?.stopPropagation();
-    await fetch(`${API}/patients/${patientId}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ patientStatus: newStatus, doctorId: user.id }),
-    });
-    setPatients((prev) =>
-      prev.map((p) => p._id === patientId ? { ...p, patientStatus: newStatus } : p)
-    );
-    if (newStatus === "Discharged") {
-      dischargeFormik.resetForm({ values: { medicines: "", notes: "", followUpDate: null } });
-      setDischargeTarget(patient);
-      pushNotif("admin", `Patient ${patient.name} has been discharged by Dr. ${user.name} (${patient.department}).`);
-    } else if (newStatus === "In Operation") {
-      pushNotif("admin", `Patient ${patient.name} is now In Operation — Dr. ${user.name} (${patient.department}).`);
-      message.success(`Status updated to ${newStatus}`);
-    } else {
-      message.success(`Status updated to ${newStatus}`);
     }
   };
 
@@ -158,46 +104,6 @@ function DoctorPatients() {
   };
 
   const pendingCount = requests.filter((r) => r.status === "Pending").length;
-
-  // ── Status buttons renderer ───────────────────────────────────────
-  const StatusButtons = ({ record }) => {
-    const current = record.patientStatus || "Admitted";
-    const isDischarged = current === "Discharged";
-    return (
-      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-        <Button
-          size="small"
-          type={current === "Admitted" ? "primary" : "default"}
-          style={{
-            ...(current === "Admitted" ? { backgroundColor: "#d97706", borderColor: "#d97706" } : {}),
-            ...(isDischarged ? { opacity: 0.35, pointerEvents: "none" } : {}),
-          }}
-          disabled={isDischarged}
-          onClick={(e) => handleStatusChange(record._id, "Admitted", record, e)}
-        >
-          Admitted
-        </Button>
-        <Button
-          size="small"
-          danger={current === "In Operation"}
-          type={current === "In Operation" ? "primary" : "default"}
-          style={isDischarged ? { opacity: 0.35, pointerEvents: "none" } : {}}
-          disabled={isDischarged}
-          onClick={(e) => handleStatusChange(record._id, "In Operation", record, e)}
-        >
-          In Operation
-        </Button>
-        <Button
-          size="small"
-          type={current === "Discharged" ? "primary" : "default"}
-          style={current === "Discharged" ? { backgroundColor: "#16a34a", borderColor: "#16a34a" } : {}}
-          onClick={(e) => handleStatusChange(record._id, "Discharged", record, e)}
-        >
-          Discharge
-        </Button>
-      </div>
-    );
-  };
 
   // ── Columns ───────────────────────────────────────────────────────
   const requestColumns = [
@@ -245,21 +151,6 @@ function DoctorPatients() {
       ),
     },
     {
-      title: "Update Status",
-      render: (_, record) => <StatusButtons record={record} />,
-    },
-    {
-      title: "Daily Report",
-      render: (_, record) => (
-        <Button
-          size="small"
-          onClick={(e) => { e.stopPropagation(); navigate("/doctor/daily-reports"); }}
-        >
-          Daily Report
-        </Button>
-      ),
-    },
-    {
       title: "Notes",
       render: (_, record) => (
         <Button size="small" onClick={(e) => openNotes(e, record)}>
@@ -267,18 +158,27 @@ function DoctorPatients() {
         </Button>
       ),
     },
+    {
+      title: "Daily Report",
+      render: (_, record) => (
+        <Button size="small" onClick={(e) => { e.stopPropagation(); navigate("/doctor/daily-reports"); }}>
+          Daily Report
+        </Button>
+      ),
+    },
   ];
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-[22px] font-bold">My Patients</h2>
-        <p className="text-sm text-slate-500 mt-1">Review incoming requests and manage your patients.</p>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>My Patients</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Review incoming requests and manage your patients.</p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Tabs
-          defaultActiveKey="requests"
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: "requests",
@@ -308,7 +208,7 @@ function DoctorPatients() {
                   rowKey="_id"
                   pagination={{ pageSize: 10 }}
                   size="small"
-                  onRow={(record) => ({ onClick: () => setSelected(record), style: { cursor: "pointer" } })}
+                  onRow={(record) => ({ style: { cursor: "default" } })}
                   locale={{ emptyText: "No accepted patients yet." }}
                 />
               ),
@@ -316,40 +216,6 @@ function DoctorPatients() {
           ]}
         />
       </div>
-
-      {/* Patient Detail Drawer */}
-      <Drawer title="Patient Details" open={!!selected} onClose={() => setSelected(null)} width={380}>
-        {selected && (
-          <div className="space-y-3 text-sm">
-            {[
-              ["Name",           selected.name],
-              ["Age",            selected.age],
-              ["Gender",         selected.gender       || "—"],
-              ["Phone",          selected.phone        || "—"],
-              ["Disease",        selected.disease      || "—"],
-              ["Department",     selected.department],
-              ["Admission Date", selected.admissionDate || "—"],
-            ].map(([l, v]) => (
-              <p key={l}>
-                <span className="text-slate-500 w-36 inline-block">{l}:</span>
-                <strong>{v}</strong>
-              </p>
-            ))}
-            <p>
-              <span className="text-slate-500 w-36 inline-block">Patient Status:</span>
-              <Tag color={patientStatusColor[selected.patientStatus || "Admitted"]}>
-                {selected.patientStatus || "Admitted"}
-              </Tag>
-            </p>
-            {selected.notes && (
-              <div>
-                <p className="text-slate-500 mb-1">Notes:</p>
-                <p className="bg-slate-50 rounded p-2 text-xs leading-relaxed">{selected.notes}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
 
       {/* Notes Modal */}
       <Modal
@@ -368,84 +234,7 @@ function DoctorPatients() {
         />
       </Modal>
 
-      {/* Discharge Modal */}
-      <Modal
-        title={`Discharge — ${dischargeTarget?.name}`}
-        open={!!dischargeTarget}
-        onCancel={() => { setDischargeTarget(null); dischargeFormik.resetForm(); }}
-        footer={null}
-        width={480}
-      >
-        <form onSubmit={dischargeFormik.handleSubmit} noValidate className="mt-3">
 
-          {/* Medicines */}
-          <div className="mb-3">
-            <label className="block text-[13px] font-semibold mb-1">Medicines Prescribed</label>
-            <Input.TextArea
-              name="medicines"
-              rows={3}
-              placeholder="e.g. Paracetamol 500mg — twice daily for 5 days"
-              value={dischargeFormik.values.medicines}
-              onChange={dischargeFormik.handleChange}
-              onBlur={dischargeFormik.handleBlur}
-              status={dischargeFormik.touched.medicines && dischargeFormik.errors.medicines ? "error" : ""}
-            />
-            <div className="flex justify-between items-center mt-1">
-              {dischargeFormik.touched.medicines && dischargeFormik.errors.medicines
-                ? <p className="text-red-500 text-xs">{dischargeFormik.errors.medicines}</p>
-                : <span />}
-              <span className="text-xs text-slate-400 ml-auto">
-                {(dischargeFormik.values.medicines || "").length}/500
-              </span>
-            </div>
-          </div>
-
-          {/* Home Care Instructions */}
-          <div className="mb-3">
-            <label className="block text-[13px] font-semibold mb-1">Home Care Instructions</label>
-            <Input.TextArea
-              name="notes"
-              rows={3}
-              placeholder="e.g. Rest for 1 week, avoid cold food, stay hydrated..."
-              value={dischargeFormik.values.notes}
-              onChange={dischargeFormik.handleChange}
-              onBlur={dischargeFormik.handleBlur}
-              status={dischargeFormik.touched.notes && dischargeFormik.errors.notes ? "error" : ""}
-            />
-            <div className="flex justify-between items-center mt-1">
-              {dischargeFormik.touched.notes && dischargeFormik.errors.notes
-                ? <p className="text-red-500 text-xs">{dischargeFormik.errors.notes}</p>
-                : <span />}
-              <span className="text-xs text-slate-400 ml-auto">
-                {(dischargeFormik.values.notes || "").length}/500
-              </span>
-            </div>
-          </div>
-
-          {/* Follow-up Date */}
-          <div className="mb-4">
-            <label className="block text-[13px] font-semibold mb-1">
-              Follow-up Date <span className="text-slate-400 font-normal">(optional)</span>
-            </label>
-            <DatePicker
-              className="w-full"
-              placeholder="Select follow-up date"
-              value={dischargeFormik.values.followUpDate ? dayjs(dischargeFormik.values.followUpDate) : null}
-              onChange={(d) => dischargeFormik.setFieldValue("followUpDate", d ? d.toDate() : null)}
-              onBlur={() => dischargeFormik.setFieldTouched("followUpDate", true)}
-              status={dischargeFormik.touched.followUpDate && dischargeFormik.errors.followUpDate ? "error" : ""}
-              disabledDate={(current) => current && current < dayjs().startOf("day")}
-            />
-            {dischargeFormik.touched.followUpDate && dischargeFormik.errors.followUpDate && (
-              <p className="text-red-500 text-xs mt-1">{dischargeFormik.errors.followUpDate}</p>
-            )}
-          </div>
-
-          <Button type="primary" htmlType="submit" block loading={dischargeFormik.isSubmitting}>
-            Save &amp; Discharge
-          </Button>
-        </form>
-      </Modal>
     </div>
   );
 }

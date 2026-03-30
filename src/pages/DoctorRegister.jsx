@@ -1,9 +1,13 @@
 import React from "react";
 import { Input, Select, Button, message } from "antd";
+import RPI from "react-phone-input-2";
+import "react-phone-input-2/lib/style.css";
+const PhoneInput = RPI.default ?? RPI;
 import { useNavigate } from "react-router-dom";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { useNotifications } from "@context/NotificationContext";
+import { useDispatch } from "react-redux";
+import { pushNotif as pushNotifAction } from "@store/notificationSlice";
 
 const API = "http://localhost:5000";
 
@@ -12,7 +16,10 @@ const DEPARTMENTS = [
   "General", "Dermatology", "Radiology", "Oncology",
 ];
 
+const DR_TITLES = ["Dr.", "Prof."];
+
 const registerSchema = Yup.object({
+  title: Yup.string().required("Title is required"),
   name: Yup.string()
     .trim()
     .required("Full name is required")
@@ -21,7 +28,12 @@ const registerSchema = Yup.object({
 
   phone: Yup.string()
     .required("Phone number is required")
-    .matches(/^\d{10}$/, "Phone must be exactly 10 digits"),
+    .test("phone-valid", "Enter a valid phone number (subscriber number cannot start with 1–5)", (val) => {
+      if (!val) return false;
+      // strip country code digits, last 10 digits must start with 6-9
+      const subscriber = val.slice(-10);
+      return /^[6-9]\d{9}$/.test(subscriber);
+    }),
 
   email: Yup.string()
     .trim()
@@ -66,11 +78,12 @@ const inputClass = (touched, error) =>
 function DoctorRegister() {
   const navigate = useNavigate();
   const [messageApi, contextHolder] = message.useMessage();
-  const { pushNotif } = useNotifications();
+  const dispatch = useDispatch();
+  const pushNotif = (target, msg) => dispatch(pushNotifAction({ target, message: msg }));
 
   const formik = useFormik({
     initialValues: {
-      name: "", phone: "", email: "", password: "",
+      title: "", name: "", phone: "", email: "", password: "",
       department: "", specialization: "", experience: "", qualification: "", bio: "",
     },
     validationSchema: registerSchema,
@@ -79,7 +92,7 @@ function DoctorRegister() {
         const res = await fetch(`${API}/register/doctor`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...values, status: "Available" }),
+          body: JSON.stringify({ ...values, name: `${values.title} ${values.name}`, phone: `+${values.phone}`, status: "Available" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message);
@@ -104,10 +117,10 @@ function DoctorRegister() {
   return (
     <div
       className="min-h-screen flex items-center justify-center py-10"
-      style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f)" }}
+      style={{ background: "linear-gradient(135deg, #1a1d2e 0%, #2d3561 100%)" }}
     >
       {contextHolder}
-      <div className="bg-white rounded-2xl p-10 w-[480px] shadow-2xl">
+      <div style={{ background: "#fff", borderRadius: 16, padding: "40px", width: 480, boxShadow: "0 8px 40px rgba(67,97,238,0.15)" }}>
 
         {/* Header */}
         <div className="text-center mb-7">
@@ -124,24 +137,34 @@ function DoctorRegister() {
               <label className="block text-[13px] font-semibold mb-1">Full Name</label>
               <Input
                 name="name"
-                placeholder="Dr. John Smith"
+                placeholder="John Smith"
                 value={formik.values.name}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
-                className={inputClass(formik.touched.name, formik.errors.name)}
-                status={formik.touched.name && formik.errors.name ? "error" : ""}
+                status={(formik.touched.name && formik.errors.name) || (formik.touched.title && formik.errors.title) ? "error" : ""}
+                addonBefore={
+                  <Select
+                    value={formik.values.title || undefined}
+                    onChange={(val) => formik.setFieldValue("title", val)}
+                    options={DR_TITLES.map((t) => ({ value: t, label: t }))}
+                    placeholder="Title"
+                    style={{ width: 80 }}
+                  />
+                }
               />
+              <ErrMsg name="title" />
               <ErrMsg name="name" />
             </div>
             <div>
               <label className="block text-[13px] font-semibold mb-1">Phone Number</label>
-              <Input
-                name="phone"
-                placeholder="9876543210"
+              <PhoneInput
+                country="in"
                 value={formik.values.phone}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                status={formik.touched.phone && formik.errors.phone ? "error" : ""}
+                onChange={(val) => formik.setFieldValue("phone", val)}
+                onBlur={() => formik.setFieldTouched("phone", true)}
+                inputStyle={{ width: "100%", borderColor: formik.touched.phone && formik.errors.phone ? "#ff4d4f" : undefined }}
+                containerStyle={{ width: "100%" }}
+                enableSearch
               />
               <ErrMsg name="phone" />
             </div>

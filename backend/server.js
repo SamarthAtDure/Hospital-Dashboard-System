@@ -64,9 +64,11 @@ app.delete("/patients/:id", async (req, res) => {
 // update patient status (Admitted / In Operation / Discharged)
 app.patch("/patients/:id/status", async (req, res) => {
   const db = await connectDB();
+  const update = { patientStatus: req.body.patientStatus, doctorId: req.body.doctorId };
+  if (req.body.dischargeDate) update.dischargeDate = req.body.dischargeDate;
   await db.collection("patients").updateOne(
     { _id: new ObjectId(req.params.id) },
-    { $set: { patientStatus: req.body.patientStatus, doctorId: req.body.doctorId } }
+    { $set: update }
   );
   res.json({ message: "Patient status updated" });
 });
@@ -570,7 +572,10 @@ app.get("/reports", async (req, res) => {
 // reports for a specific patient
 app.get("/reports/:patientId", async (req, res) => {
   const db = await connectDB();
-  const data = await db.collection("reports").find({ patientId: req.params.patientId }).toArray();
+  const data = await db.collection("reports")
+    .find({ patientId: req.params.patientId })
+    .sort({ createdAt: -1 })
+    .toArray();
   res.json(data);
 });
 

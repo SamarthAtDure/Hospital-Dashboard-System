@@ -4,7 +4,14 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path' // needed for resolve.alias
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
+    tailwindcss(),
+  ],
 
   // base: sets the public base path for the app
   base: './',
@@ -17,6 +24,7 @@ export default defineConfig({
       '@components':  path.resolve(__dirname, 'src/components'),
       '@pages':       path.resolve(__dirname, 'src/pages'),
       '@context':     path.resolve(__dirname, 'src/context'),
+      '@store':        path.resolve(__dirname, 'src/store'),
       '@data':        path.resolve(__dirname, 'src/data'),
       '@charts':      path.resolve(__dirname, 'src/components/charts'),
     },

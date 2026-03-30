@@ -70,12 +70,10 @@ function DoctorRequests() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div style={{ marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-[22px] font-bold">Doctor Requests</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Pending doctor registration requests awaiting your approval.
-          </p>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>Doctor Requests</h2>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Pending doctor registration requests awaiting your approval.</p>
         </div>
         {requests.length > 0 && (
           <span className="bg-yellow-100 text-yellow-700 text-xs font-semibold px-3 py-1 rounded-full">
@@ -84,7 +82,7 @@ function DoctorRequests() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         {requests.length === 0 ? (
           <div className="text-center py-16 text-slate-400">
             <p className="text-4xl mb-3">✅</p>
@@ -105,7 +103,7 @@ function DoctorRequests() {
         title="Registration Details"
         open={!!selected}
         onClose={() => setSelected(null)}
-        width={400}
+        size="default"
         footer={
           selected && (
             <div className="flex gap-3">

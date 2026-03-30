@@ -1,47 +1,139 @@
-import React, { useState, useEffect } from "react";
-import { Table, Tag, Button, Select, Modal, Form, Input, message } from "antd";
+import React, { useState, useEffect, useCallback } from "react";
+import { Table, Tag, Button, Modal, Input, DatePicker, App } from "antd";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import dayjs from "dayjs";
+import { useDispatch, useSelector } from "react-redux";
+import { pushNotif as pushNotifAction } from "@store/notificationSlice";
 
 const API = "http://localhost:5000";
-const statusColor = { Confirmed: "green", Pending: "gold", Cancelled: "red", Completed: "blue" };
-const { TextArea } = Input;
+const patientStatusColor = { Admitted: "gold", "In Operation": "red", Discharged: "green" };
+const apptStatusColor    = { "In Work": "blue", Completed: "green" };
 
 function DoctorAppointments() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const [appointments, setAppointments] = useState([]);
-  const [notesTarget, setNotesTarget] = useState(null); // appointment being edited
-  const [form] = Form.useForm();
+  const { message } = App.useApp();
+  const user     = useSelector((state) => state.auth.user) || {};
+  const dispatch = useDispatch();
+  const pushNotif = (target, msg) => dispatch(pushNotifAction({ target, message: msg }));
 
-  const fetch_ = () =>
-    fetch(`${API}/doctor/${user.id}/appointments`)
-      .then((r) => r.json())
-      .then(setAppointments);
+  const [appointments,    setAppointments]    = useState([]);
+  const [patients,        setPatients]        = useState([]);
+  const [dischargeTarget, setDischargeTarget] = useState(null);
 
-  useEffect(() => { fetch_(); }, [user.id]);
+  const dischargeSchema = Yup.object({
+    dischargeDate: Yup.string().required(),
+    medicines: Yup.string().trim().required("Medicines prescribed is required").max(500),
+    notes:     Yup.string().trim().required("Home care instructions are required").max(500),
+    followUpDate: Yup.date().nullable().typeError("Select a valid date")
+      .min(dayjs().startOf("day").toDate(), "Must be today or future"),
+  });
 
-  const updateStatus = async (id, status) => {
+  const dischargeFormik = useFormik({
+    initialValues: { dischargeDate: dayjs().format("YYYY-MM-DD"), medicines: "", notes: "", followUpDate: null },
+    validationSchema: dischargeSchema,
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      await fetch(`${API}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId:    dischargeTarget.patientId || dischargeTarget._id,
+          doctorId:     user.id,
+          patientName:  dischargeTarget.patient  || "",
+          doctorName:   user.name                || "",
+          diagnosis:    dischargeTarget.disease  || "",
+          medicines:    values.medicines,
+          notes:        values.notes,
+          dischargeDate: values.dischargeDate,
+          followUpDate: values.followUpDate ? dayjs(values.followUpDate).format("YYYY-MM-DD") : "",
+        }),
+      });
+      // update patient status + dischargeDate
+      if (dischargeTarget.patientId) {
+        await fetch(`${API}/patients/${dischargeTarget.patientId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patientStatus: "Discharged", doctorId: user.id, dischargeDate: values.dischargeDate }),
+        });
+        pushNotif("admin", `Patient ${dischargeTarget.patient} has been discharged by Dr. ${user.name}.`);
+      }
+      message.success("Discharge report saved.");
+      resetForm();
+      setDischargeTarget(null);
+      fetchAll();
+      setSubmitting(false);
+    },
+  });
+
+  const fetchAll = useCallback(() => {
+    Promise.all([
+      fetch(`${API}/doctor/${user.id}/appointments`).then((r) => r.json()),
+      fetch(`${API}/doctor/${user.id}/patients`).then((r) => r.json()),
+    ]).then(([appts, pts]) => {
+      setAppointments(appts);
+      setPatients(pts);
+    }).catch(() => {});
+  }, [user.id]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // find the patient record linked to an appointment
+  const getPatient = (appt) =>
+    patients.find((p) => p.name === appt.patient || p._id === appt.patientId) || null;
+
+  const updateApptStatus = async (id, status) => {
     await fetch(`${API}/appointments/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
     message.success(`Status updated to ${status}`);
-    fetch_();
+    fetchAll();
   };
 
-  const saveNotes = async (values) => {
-    await fetch(`${API}/appointments/${notesTarget._id}/notes`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    message.success("Notes saved");
-    setNotesTarget(null);
-    fetch_();
+  const handleStatusChange = async (appt, newStatus) => {
+    const patient = getPatient(appt);
+    if (!patient) { message.warning("Patient record not found."); return; }
+
+    if (newStatus === "Discharged") {
+      // don't update patient status yet — form submit will do it with dischargeDate
+      dischargeFormik.resetForm({ values: { dischargeDate: dayjs().format("YYYY-MM-DD"), medicines: "", notes: "", followUpDate: null } });
+      setDischargeTarget({ ...appt, patientId: patient._id, disease: patient.disease });
+    } else {
+      await fetch(`${API}/patients/${patient._id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientStatus: newStatus, doctorId: user.id }),
+      });
+      if (newStatus === "In Operation")
+        pushNotif("admin", `Patient ${appt.patient} is now In Operation — Dr. ${user.name} (${appt.department}).`);
+      message.success(`Status updated to ${newStatus}`);
+      fetchAll();
+    }
   };
 
-  const openNotes = (record) => {
-    setNotesTarget(record);
-    form.setFieldsValue({ notes: record.notes || "", prescription: record.prescription || "" });
+  const StatusButtons = ({ appt }) => {
+    const patient = getPatient(appt);
+    const current = patient?.patientStatus || "Admitted";
+    const isDischarged = current === "Discharged";
+    return (
+      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+        <Button size="small"
+          type={current === "Admitted" ? "primary" : "default"}
+          style={{ ...(current === "Admitted" ? { backgroundColor: "#d97706", borderColor: "#d97706" } : {}), ...(isDischarged ? { opacity: 0.35, pointerEvents: "none" } : {}) }}
+          disabled={isDischarged}
+          onClick={() => handleStatusChange(appt, "Admitted")}>Admitted</Button>
+        <Button size="small"
+          danger={current === "In Operation"}
+          type={current === "In Operation" ? "primary" : "default"}
+          style={isDischarged ? { opacity: 0.35, pointerEvents: "none" } : {}}
+          disabled={isDischarged}
+          onClick={() => handleStatusChange(appt, "In Operation")}>In Operation</Button>
+        <Button size="small"
+          type={current === "Discharged" ? "primary" : "default"}
+          style={current === "Discharged" ? { backgroundColor: "#16a34a", borderColor: "#16a34a" } : {}}
+          onClick={() => handleStatusChange(appt, "Discharged")}>Discharge</Button>
+      </div>
+    );
   };
 
   const columns = [
@@ -50,60 +142,117 @@ function DoctorAppointments() {
     { title: "Date",       dataIndex: "date",       sorter: (a, b) => new Date(a.date) - new Date(b.date) },
     { title: "Time",       dataIndex: "time" },
     {
-      title: "Status", dataIndex: "status",
+      title: "Appt Status", dataIndex: "status",
       render: (s, record) => (
-        <Select
-          value={s}
-          size="small"
-          style={{ width: 130 }}
-          onChange={(val) => updateStatus(record._id, val)}
-          options={[
-            { value: "Pending",   label: <Tag color="gold">Pending</Tag> },
-            { value: "Confirmed", label: <Tag color="green">Confirmed</Tag> },
-            { value: "Completed", label: <Tag color="blue">Completed</Tag> },
-            { value: "Cancelled", label: <Tag color="red">Cancelled</Tag> },
-          ]}
-        />
+        <div className="flex gap-1">
+          {["In Work", "Completed"].map((opt) => (
+            <Button key={opt} size="small"
+              type={s === opt ? "primary" : "default"}
+              style={s === opt && opt === "In Work"      ? { backgroundColor: "#3b82f6", borderColor: "#3b82f6" } :
+                     s === opt && opt === "Completed"    ? { backgroundColor: "#16a34a", borderColor: "#16a34a" } : {}}
+              onClick={() => updateApptStatus(record._id, opt)}>
+              {opt}
+            </Button>
+          ))}
+        </div>
       ),
     },
     {
-      title: "Notes",
-      render: (_, record) => (
-        <Button size="small" onClick={() => openNotes(record)}>
-          {record.notes ? "Edit Notes" : "Add Notes"}
-        </Button>
-      ),
+      title: "Patient Status",
+      render: (_, record) => {
+        const patient = getPatient(record);
+        const s = patient?.patientStatus || "Admitted";
+        return <Tag color={patientStatusColor[s]}>{s}</Tag>;
+      },
+    },
+    {
+      title: "Update Status",
+      render: (_, record) => <StatusButtons appt={record} />,
     },
   ];
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-[22px] font-bold">My Appointments</h2>
-        <p className="text-sm text-slate-500 mt-1">Manage your patient appointments.</p>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>My Appointments</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Manage your patient appointments and update patient status.</p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table columns={columns} dataSource={appointments} rowKey="_id" pagination={{ pageSize: 10 }} />
       </div>
 
+      {/* Discharge Modal */}
       <Modal
-        title="Notes & Prescription"
-        open={!!notesTarget}
-        onCancel={() => setNotesTarget(null)}
+        title={`Discharge — ${dischargeTarget?.patient}`}
+        open={!!dischargeTarget}
+        onCancel={() => { setDischargeTarget(null); dischargeFormik.resetForm(); }}
         footer={null}
+        width={480}
       >
-        <Form form={form} layout="vertical" onFinish={saveNotes} className="mt-4">
-          <Form.Item name="notes" label="Clinical Notes">
-            <TextArea rows={3} placeholder="Enter clinical notes..." />
-          </Form.Item>
-          <Form.Item name="prescription" label="Prescription">
-            <TextArea rows={3} placeholder="Enter prescription..." />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" block>Save</Button>
-          </Form.Item>
-        </Form>
+        <form onSubmit={dischargeFormik.handleSubmit} noValidate className="mt-3">
+
+          {/* Discharge Date — read-only, set to today */}
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Discharge Date</label>
+            <input
+              readOnly
+              value={dayjs(dischargeFormik.values.dischargeDate).format("DD MMM YYYY")}
+              style={{
+                width: "100%", padding: "6px 11px", fontSize: 13,
+                border: "1px solid #d9d9d9", borderRadius: 6,
+                background: "#f8fafc", color: "#475569", cursor: "default",
+              }}
+            />
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Medicines Prescribed</label>
+            <Input.TextArea name="medicines" rows={3} placeholder="e.g. Paracetamol 500mg — twice daily for 5 days"
+              value={dischargeFormik.values.medicines}
+              onChange={dischargeFormik.handleChange}
+              onBlur={dischargeFormik.handleBlur}
+              status={dischargeFormik.touched.medicines && dischargeFormik.errors.medicines ? "error" : ""} />
+            <div className="flex justify-between mt-1">
+              {dischargeFormik.touched.medicines && dischargeFormik.errors.medicines
+                ? <p className="text-red-500 text-xs">{dischargeFormik.errors.medicines}</p> : <span />}
+              <span className="text-xs text-slate-400 ml-auto">{(dischargeFormik.values.medicines || "").length}/500</span>
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-[13px] font-semibold mb-1">Home Care Instructions</label>
+            <Input.TextArea name="notes" rows={3} placeholder="e.g. Rest for 1 week, stay hydrated..."
+              value={dischargeFormik.values.notes}
+              onChange={dischargeFormik.handleChange}
+              onBlur={dischargeFormik.handleBlur}
+              status={dischargeFormik.touched.notes && dischargeFormik.errors.notes ? "error" : ""} />
+            <div className="flex justify-between mt-1">
+              {dischargeFormik.touched.notes && dischargeFormik.errors.notes
+                ? <p className="text-red-500 text-xs">{dischargeFormik.errors.notes}</p> : <span />}
+              <span className="text-xs text-slate-400 ml-auto">{(dischargeFormik.values.notes || "").length}/500</span>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold mb-1">
+              Follow-up Date <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <DatePicker className="w-full"
+              value={dischargeFormik.values.followUpDate ? dayjs(dischargeFormik.values.followUpDate) : null}
+              onChange={(d) => dischargeFormik.setFieldValue("followUpDate", d ? d.toDate() : null)}
+              onBlur={() => dischargeFormik.setFieldTouched("followUpDate", true)}
+              status={dischargeFormik.touched.followUpDate && dischargeFormik.errors.followUpDate ? "error" : ""}
+              disabledDate={(c) => c && c < dayjs().startOf("day")} />
+            {dischargeFormik.touched.followUpDate && dischargeFormik.errors.followUpDate && (
+              <p className="text-red-500 text-xs mt-1">{dischargeFormik.errors.followUpDate}</p>
+            )}
+          </div>
+
+          <Button type="primary" htmlType="submit" block loading={dischargeFormik.isSubmitting}>
+            Save &amp; Discharge
+          </Button>
+        </form>
       </Modal>
     </div>
   );

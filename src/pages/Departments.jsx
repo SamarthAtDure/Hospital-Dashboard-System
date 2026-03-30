@@ -3,9 +3,10 @@ import { Button, Modal, Input, Popconfirm, message, Skeleton, Tag, Avatar, Toolt
 import { ReloadOutlined } from "@ant-design/icons";
 import { useFormik } from "formik";
 import * as Yup from "yup";
+import { getDepartments, refreshDepartmentsFromAPI } from "@/utils/departmentDB";
 
 const API          = "http://localhost:5000";
-const REFRESH_MS   = 1 * 60 * 1000; // 5 minutes
+const REFRESH_MS   = 5 * 60 * 1000; // 5 minutes
 const availColor   = { Available: "green", Busy: "gold", "On Leave": "red" };
 
 function Departments() {
@@ -49,6 +50,7 @@ function Departments() {
         });
         message.success("Department added");
       }
+      // Re-fetch from API → syncs IndexedDB → updates UI
       resetForm();
       setModalOpen(false);
       fetchDepts(true);
@@ -57,22 +59,20 @@ function Departments() {
   });
 
   // silent=true → no full-page skeleton, just a small spinner in the header
-  const fetchDepts = (silent = false) => {
+  const fetchDepts = async (silent = false) => {
     if (silent) setRefreshing(true);
     else        setLoading(true);
-
-    fetch(`${API}/departments/with-doctors`)
-      .then((r) => r.json())
-      .then((data) => {
-        setDepartments(data);
-        setLastUpdated(new Date());
-        // keep selected in sync — re-find by name so counts update
-        setSelected((prev) =>
-          prev ? (data.find((d) => d.name === prev.name) || data[0]) : data[0]
-        );
-      })
-      .catch(() => {})
-      .finally(() => { setLoading(false); setRefreshing(false); });
+    try {
+      // Always refresh from API → IndexedDB, then read from IndexedDB
+      await refreshDepartmentsFromAPI();
+      const data = await getDepartments();
+      setDepartments(data);
+      setLastUpdated(new Date());
+      setSelected((prev) =>
+        prev ? (data.find((d) => d.name === prev.name) || data[0]) : data[0]
+      );
+    } catch {}
+    finally { setLoading(false); setRefreshing(false); }
   };
 
   // initial load + auto-refresh every 5 min
@@ -114,10 +114,10 @@ function Departments() {
   return (
     <div>
       {/* ── Page header ─────────────────────────────────────────── */}
-      <div className="mb-5 flex items-center justify-between">
+      <div style={{ marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-[22px] font-bold">Departments</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Manage departments and view assigned doctors.</p>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>Departments</h2>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Manage departments and view assigned doctors.</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400">
@@ -141,7 +141,7 @@ function Departments() {
           { label: "Total Doctors",     value: totalDoctors,       color: "text-blue-600",   bg: "bg-blue-50"   },
           { label: "Total Patients",    value: totalPatients,      color: "text-emerald-600", bg: "bg-emerald-50" },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl p-5 shadow-sm flex items-center gap-4">
+          <div key={s.label} style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: 16 }}>
             <div className={`w-12 h-12 rounded-xl ${s.bg} flex items-center justify-center`}>
               <span className={`text-2xl font-bold ${s.color}`}>{loading ? "—" : s.value}</span>
             </div>
@@ -154,7 +154,7 @@ function Departments() {
       <div className="flex gap-5" style={{ minHeight: 520 }}>
 
         {/* Left: department list */}
-        <div className="w-[230px] shrink-0 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+        <div style={{ width: 230, flexShrink: 0, background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div className="px-4 py-3 border-b border-slate-100">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">All Departments</span>
           </div>
@@ -205,7 +205,7 @@ function Departments() {
           {selected && (
             <>
               {/* Dept header card */}
-              <div className="bg-white rounded-xl shadow-sm px-6 py-5">
+              <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", padding: "20px 24px" }}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-xl bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
@@ -255,7 +255,7 @@ function Departments() {
               </div>
 
               {/* Doctors list */}
-              <div className="bg-white rounded-xl shadow-sm flex-1">
+              <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", flex: 1 }}>
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="font-semibold text-[15px]">Doctors in {selected.name}</span>

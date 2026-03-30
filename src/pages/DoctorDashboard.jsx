@@ -5,7 +5,8 @@ import { Table, Tag, Radio, message, Skeleton } from "antd";
 // import { useDoctors, isOnShift } from "../context/DoctorContext";
 import StatCard from "@components/StatCard";
 import LineChart from "@charts/LineChart";
-import { useDoctors, isOnShift } from "@context/DoctorContext";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchDoctors, isOnShift } from "@store/doctorSlice";
 
 const API = "http://localhost:5000";
 const apptStatusColor = { Confirmed: "green", Pending: "gold", Cancelled: "red", Completed: "blue" };
@@ -13,8 +14,9 @@ const availColor      = { Available: "green", Busy: "orange", "On Leave": "red" 
 const DAYS            = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 function DoctorDashboard() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const { doctors, updateWorkingHours } = useDoctors();
+  const user = useSelector((state) => state.auth.user) || {};
+  const dispatch = useDispatch();
+  const doctors = useSelector((state) => state.doctors.doctors);
 
   const [stats,        setStats]        = useState({});
   const [todayAppts,   setTodayAppts]   = useState([]);
@@ -103,7 +105,7 @@ function DoctorDashboard() {
         </div>
 
         {/* Availability selector */}
-        <div className="bg-white rounded-xl px-5 py-3 shadow-sm flex items-center gap-4">
+        <div style={{ background: "#fff", borderRadius: 14, padding: "12px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: 16 }}>
           <span className="text-sm font-semibold text-slate-600">My Availability:</span>
           <Tag color={availColor[availability]} className="!text-sm !px-3 !py-0.5 !m-0">{availability}</Tag>
           <Radio.Group
@@ -125,7 +127,7 @@ function DoctorDashboard() {
       <div className="grid grid-cols-5 gap-4 mb-6">
         {loading
           ? Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-5 shadow-sm">
+              <div key={i} style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                 <Skeleton active paragraph={{ rows: 1 }} title={{ width: "60%" }} />
               </div>
             ))
@@ -134,7 +136,7 @@ function DoctorDashboard() {
       </div>
 
       {/* Working Hours Card */}
-      <div className="bg-white rounded-xl p-5 shadow-sm mb-6">
+        <div style={{ background: "#fff", borderRadius: 14, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24 }}>
         {!me ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : (
@@ -186,20 +188,20 @@ function DoctorDashboard() {
       <div className="grid grid-cols-2 gap-6">
         {loading ? (
           <>
-            <div className="bg-white rounded-xl p-6 shadow-sm"><Skeleton active paragraph={{ rows: 5 }} /></div>
-            <div className="bg-white rounded-xl p-6 shadow-sm"><Skeleton active paragraph={{ rows: 5 }} /></div>
+            <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}><Skeleton active paragraph={{ rows: 5 }} /></div>
+            <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}><Skeleton active paragraph={{ rows: 5 }} /></div>
           </>
         ) : (
           <>
             {chartData.length > 0
               ? <LineChart data={chartData} />
               : (
-                <div className="bg-white rounded-xl p-6 shadow-sm flex items-center justify-center text-slate-400 text-sm">
+                <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#9ca3af" }}>
                   No appointment history to chart yet.
                 </div>
               )
             }
-            <div className="bg-white rounded-xl p-6 shadow-sm">
+            <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <h3 className="text-[15px] font-semibold mb-4">Today's Appointments</h3>
               {todayAppts.length === 0
                 ? <p className="text-slate-400 text-sm">No appointments scheduled for today.</p>

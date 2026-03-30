@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Descriptions, Form, Input, Select, Button, message, Spin, Tag, TimePicker, Checkbox } from "antd";
-import dayjs from "dayjs";
-// import { useDoctors, isOnShift } from "../context/DoctorContext";
-import { useDoctors, isOnShift } from "@context/DoctorContext";
+import { Descriptions, Form, Input, Select, Button, message, Spin, Tag } from "antd";
+import { useDispatch, useSelector } from "react-redux";
+import { isOnShift } from "@store/doctorSlice";
+import { loginSuccess } from "@store/authSlice";
 
 const API = "http://localhost:5000";
 
@@ -20,13 +20,13 @@ function AdminProfile() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-[22px] font-bold">Profile</h2>
-        <p className="text-sm text-slate-500 mt-1">Your account information.</p>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>Profile</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Your account information.</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
         {/* Avatar card */}
-        <div className="bg-white rounded-xl p-7 shadow-sm text-center">
+        <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", textAlign: "center" }}>
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4"
             style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)" }}
@@ -39,7 +39,7 @@ function AdminProfile() {
         </div>
 
         {/* Details */}
-        <div className="bg-white rounded-xl p-7 shadow-sm">
+        <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <h3 className="text-base font-semibold mb-5 pb-3 border-b border-slate-100">Account Details</h3>
           <Descriptions column={1} bordered size="small">
             <Descriptions.Item label="Full Name">{adminInfo.name}</Descriptions.Item>
@@ -57,15 +57,13 @@ function AdminProfile() {
 
 // ── Doctor profile (live data + editable) ──────────────────────────
 function DoctorProfile() {
-  const { updateWorkingHours } = useDoctors();
-  const sessionUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const dispatch = useDispatch();
+  const sessionUser = useSelector((state) => state.auth.user) || {};
   const [doctor, setDoctor]   = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
-  const [hoursEditing, setHoursEditing] = useState(false);
-  const [form]      = Form.useForm();
-  const [hoursForm] = Form.useForm();
+  const [form] = Form.useForm();
 
   // fetch latest doctor data from DB
   const fetchDoctor = () =>
@@ -79,8 +77,7 @@ function DoctorProfile() {
 
   useEffect(() => { fetchDoctor(); }, [sessionUser.id]);
 
-  const startEdit = () => {
-    form.setFieldsValue({
+  const startEdit = () => {    form.setFieldsValue({
       name:           doctor.name,
       phone:          doctor.phone || "",
       specialization: doctor.specialization || "",
@@ -92,33 +89,7 @@ function DoctorProfile() {
     setEditing(true);
   };
 
-  const startHoursEdit = () => {
-    const wh = doctor.workingHours;
-    hoursForm.setFieldsValue({
-      start: wh?.start ? dayjs(wh.start, "HH:mm") : null,
-      end:   wh?.end   ? dayjs(wh.end,   "HH:mm") : null,
-      days:  wh?.days  || ["Mon","Tue","Wed","Thu","Fri"],
-    });
-    setHoursEditing(true);
-  };
-
-  const handleSaveHours = async (values) => {
-    setSaving(true);
-    try {
-      await updateWorkingHours(sessionUser.id, {
-        start: values.start?.format("HH:mm") || "",
-        end:   values.end?.format("HH:mm")   || "",
-        days:  values.days || [],
-      });
-      message.success("Working hours updated!");
-      setHoursEditing(false);
-      fetchDoctor();
-    } catch {
-      message.error("Failed to update working hours.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const startHoursEdit = () => {}; // working hours are set by admin in the Doctors page
 
   const handleSave = async (values) => {
     setSaving(true);
@@ -131,7 +102,7 @@ function DoctorProfile() {
       if (!res.ok) throw new Error();
       // update localStorage name if changed
       if (values.name !== sessionUser.name) {
-        localStorage.setItem("user", JSON.stringify({ ...sessionUser, name: values.name }));
+        dispatch(loginSuccess({ ...sessionUser, name: values.name }));
       }
       message.success("Profile updated successfully!");
       setEditing(false);
@@ -150,10 +121,10 @@ function DoctorProfile() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-[22px] font-bold">My Profile</h2>
-          <p className="text-sm text-slate-500 mt-1">View and update your professional information.</p>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>My Profile</h2>
+          <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>View and update your professional information.</p>
         </div>
         {!editing && (
           <Button type="primary" onClick={startEdit}>Edit Profile</Button>
@@ -162,10 +133,10 @@ function DoctorProfile() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
         {/* Avatar card */}
-        <div className="bg-white rounded-xl p-7 shadow-sm text-center">
+        <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", textAlign: "center" }}>
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4"
-            style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)" }}
+            style={{ background: "linear-gradient(135deg, #4361ee, #7c3aed)" }}
           >{initial}</div>
           <h3 className="text-lg font-bold">{doctor.name}</h3>
           <span className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
@@ -183,7 +154,7 @@ function DoctorProfile() {
         </div>
 
         {/* Details / Edit form */}
-        <div className="bg-white rounded-xl p-7 shadow-sm">
+        <div style={{ background: "#fff", borderRadius: 14, padding: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           {!editing ? (
             <>
               <h3 className="text-base font-semibold mb-5 pb-3 border-b border-slate-100">Professional Details</h3>
@@ -210,12 +181,11 @@ function DoctorProfile() {
                       </Tag>
                     </div>
                   ) : (
-                    <span className="text-slate-400">Not configured</span>
+                    <span className="text-slate-400">Not configured — contact admin</span>
                   )}
                 </Descriptions.Item>
               </Descriptions>
               <div className="mt-4">
-                <Button onClick={startHoursEdit}>Edit Working Hours</Button>
               </div>
             </>
           ) : (
@@ -263,38 +233,13 @@ function DoctorProfile() {
         </div>
       </div>
 
-      {/* Working Hours Modal */}
-      {hoursEditing && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-8 w-[420px] shadow-2xl">
-            <h3 className="text-base font-semibold mb-5">Edit Working Hours</h3>
-            <Form form={hoursForm} layout="vertical" onFinish={handleSaveHours}>
-              <div className="grid grid-cols-2 gap-4">
-                <Form.Item name="start" label="Shift Start">
-                  <TimePicker format="HH:mm" className="w-full" minuteStep={15} />
-                </Form.Item>
-                <Form.Item name="end" label="Shift End">
-                  <TimePicker format="HH:mm" className="w-full" minuteStep={15} />
-                </Form.Item>
-              </div>
-              <Form.Item name="days" label="Working Days">
-                <Checkbox.Group options={DAYS} />
-              </Form.Item>
-              <div className="flex gap-3 mt-2">
-                <Button type="primary" htmlType="submit" loading={saving} block>Save Hours</Button>
-                <Button onClick={() => setHoursEditing(false)} block>Cancel</Button>
-              </div>
-            </Form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Root export: picks the right profile based on role ─────────────
 function Profile() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = useSelector((state) => state.auth.user) || {};
   return user.role === "doctor" ? <DoctorProfile /> : <AdminProfile />;
 }
 

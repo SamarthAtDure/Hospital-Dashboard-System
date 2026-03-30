@@ -4,81 +4,118 @@ import dayjs from "dayjs";
 
 const API = "http://localhost:5000";
 
-/* ─── palette ───────────────────────────────────────────────────────────────
-   #0f766e  teal accent   (headings, labels, accents)
-   #134e4a  teal dark     (header text)
-   #1e293b  slate-800     (body text)
-   #475569  slate-600     (secondary text)
-   #94a3b8  slate-400     (muted / placeholders)
-   #e2e8f0  slate-200     (borders)
-   #f8fafc  slate-50      (section backgrounds)
-   #ffffff  white         (page / card bg)
-──────────────────────────────────────────────────────────────────────────── */
-
-const ACCENT   = "#0f766e";
-const DARK     = "#134e4a";
-const BODY     = "#1e293b";
-const MUTED    = "#475569";
-const FAINT    = "#94a3b8";
-const BORDER   = "#e2e8f0";
-const SURFACE  = "#f8fafc";
+/* ── palette ── report keeps blue; drawer is monochrome ── */
+const HEADING_PRIMARY   = "#1d4ed8";
+const HEADING_SECONDARY = "#2563eb";
+const ACCENT            = HEADING_PRIMARY;
+const DARK              = "#0f172a";
+const BODY              = "#1e293b";
+const MUTED             = "#64748b";
+const FAINT             = "#94a3b8";
+const BORDER            = "#e2e8f0";
+const SURFACE           = "#f8fafc";
 
 /* status dot colors — no background boxes, just a small dot + text */
 const STATUS_COLOR = { Stable: "#16a34a", Recovering: "#0f766e", Critical: "#dc2626" };
 
-/* ─── shared style tokens ─────────────────────────────────────────────────── */
 const S = {
-  page:      { fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif", color: BODY,
-               background: "#fff", padding: "40px 44px", maxWidth: 880, margin: "0 auto" },
-
-  /* header */
-  header:    { display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-               borderBottom: `2px solid ${DARK}`, paddingBottom: 18, marginBottom: 32 },
-  hospName:  { fontSize: 21, fontWeight: 800, color: DARK, margin: 0, letterSpacing: "-0.3px" },
-  hospSub:   { fontSize: 11, color: MUTED, marginTop: 3, fontWeight: 400 },
-  headerR:   { textAlign: "right", fontSize: 11, color: MUTED, lineHeight: 1.8 },
-  reportTag: { fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: 1,
-               textTransform: "uppercase", display: "block", marginBottom: 2 },
-
-  /* section */
-  section:   { marginBottom: 28 },
-  secTitle:  { fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase",
-               letterSpacing: 1.4, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 },
-  secLine:   { flex: 1, height: 1, background: BORDER },
-
-  /* two-col grid */
-  grid2:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 },
-
-  /* info row */
-  row:       { display: "flex", justifyContent: "space-between", alignItems: "baseline",
-               padding: "7px 0", borderBottom: `1px solid ${BORDER}`, fontSize: 13 },
-  rowLabel:  { color: MUTED, fontWeight: 400 },
-  rowValue:  { fontWeight: 600, color: BODY, textAlign: "right", maxWidth: 230 },
-
-  /* table */
+  page:      {
+    fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+    color: BODY,
+    background: "#fff",
+    padding: "34px 38px",
+    maxWidth: 880,
+    margin: "0 auto",
+  },
+  card:      {
+    border: `1px solid ${BORDER}`,
+    borderRadius: 12,
+    padding: "14px 16px",
+    background: "#fff",
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  },
+  header:    {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    borderBottom: `2px solid ${BORDER}`,
+    paddingBottom: 16,
+    marginBottom: 28,
+  },
+  hospName:  { fontSize: 22, fontWeight: 800, color: DARK, margin: 0, letterSpacing: "-0.2px" },
+  hospSub:   { fontSize: 11, color: MUTED, marginTop: 4, fontWeight: 500 },
+  headerR:   { textAlign: "right", fontSize: 11, color: MUTED, lineHeight: 1.9 },
+  reportTag: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: MUTED,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    display: "inline-block",
+    marginBottom: 6,
+    border: `1px solid ${BORDER}`,
+    padding: "3px 9px",
+    borderRadius: 4,
+  },
+  section:   { marginBottom: 24 },
+  secTitle:  {
+    fontSize: 11,
+    fontWeight: 800,
+    color: HEADING_PRIMARY,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  secLine:   {
+    flex: 1,
+    height: 1,
+    borderRadius: 999,
+    background: BORDER,
+  },
+  grid2:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 },
+  row:       {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 18,
+    padding: "7px 0",
+    borderBottom: `1px dashed ${BORDER}`,
+    fontSize: 12.5,
+  },
+  rowLabel:  { color: MUTED, fontWeight: 500 },
+  rowValue:  { fontWeight: 600, color: BODY, textAlign: "right", maxWidth: 370 },
   tableWrap: { overflowX: "auto" },
   table:     { width: "100%", borderCollapse: "collapse", fontSize: 11.5 },
-  th:        { padding: "9px 11px", textAlign: "left", fontWeight: 600, color: ACCENT,
-               borderBottom: `2px solid ${BORDER}`, whiteSpace: "nowrap",
-               background: SURFACE, fontSize: 11 },
+  th:        {
+    padding: "9px 11px",
+    textAlign: "left",
+    fontWeight: 700,
+    color: HEADING_PRIMARY,
+    borderBottom: `2px solid ${BORDER}`,
+    whiteSpace: "nowrap",
+    background: "#f1f5f9",
+    fontSize: 11,
+  },
   tdBase:    { padding: "8px 11px", borderBottom: `1px solid ${BORDER}`,
                verticalAlign: "top", color: BODY, fontSize: 12 },
-
-  /* text block */
-  prose:     { fontSize: 13, color: BODY, lineHeight: 1.7, padding: "10px 0" },
-
-  /* instruction row */
-  instrRow:  { display: "flex", gap: 12, padding: "9px 0",
-               borderBottom: `1px solid ${BORDER}`, fontSize: 13 },
-  instrNum:  { fontSize: 11, fontWeight: 700, color: ACCENT, minWidth: 18, paddingTop: 1 },
-
-  /* signature */
-  sigGrid:   { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginTop: 8 },
-  sigBox:    { paddingTop: 40, borderTop: `1.5px solid ${BODY}`, textAlign: "center" },
+  prose:     { fontSize: 12.5, color: BODY, lineHeight: 1.7, padding: "4px 0" },
+  dayCard:   {
+    border: `1px solid ${BORDER}`,
+    borderRadius: 10,
+    padding: "10px 12px",
+    marginBottom: 10,
+    background: "#fff",
+    boxShadow: "0 1px 2px rgba(15,23,42,0.03)",
+  },
+  dayHead:   { fontSize: 12.5, fontWeight: 700, color: DARK, marginBottom: 6 },
+  bullet:    { margin: 0, paddingLeft: 18, color: BODY, fontSize: 12.5, lineHeight: 1.8 },
+  sigGrid:   { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginTop: 8 },
+  sigBox:    { paddingTop: 38, borderTop: `1.5px solid ${BODY}`, textAlign: "center" },
   sigName:   { fontSize: 13, fontWeight: 700, color: BODY },
   sigRole:   { fontSize: 11, color: MUTED, marginTop: 3 },
-
-  /* footer */
   footer:    { borderTop: `1px solid ${BORDER}`, marginTop: 36, paddingTop: 12,
                display: "flex", justifyContent: "space-between",
                fontSize: 10, color: FAINT, letterSpacing: 0.2 },
@@ -86,12 +123,11 @@ const S = {
                textTransform: "uppercase", fontSize: 10 },
 };
 
-/* ─── tiny helpers ────────────────────────────────────────────────────────── */
 function Row({ label, value }) {
   return (
     <div style={S.row}>
       <span style={S.rowLabel}>{label}</span>
-      <span style={S.rowValue}>{value || "—"}</span>
+      <span style={S.rowValue}>{value}</span>
     </div>
   );
 }
@@ -116,97 +152,171 @@ function StatusDot({ status }) {
   );
 }
 
-/* ─── print ───────────────────────────────────────────────────────────────── */
-function printReport(patientId) {
-  const el = document.getElementById(`fsr-${patientId}`);
-  if (!el) return;
-  const w = window.open("", "_blank", "width=920,height=1060");
-  w.document.write(`<!DOCTYPE html><html><head>
-    <title>Final Stay Report — MediDash Hospital</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0;}
-      body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      @page{size:A4;margin:12mm 14mm;}
-    </style>
-    </head><body>${el.innerHTML}</body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => { w.print(); w.close(); }, 500);
+function hasValue(v) {
+  return v !== undefined && v !== null && String(v).trim() !== "";
 }
 
-/* ─── PDF report layout ───────────────────────────────────────────────────── */
-function ReportContent({ report: r }) {
-  const totalDays = r.admissionDate && r.dischargeDate
-    ? dayjs(r.dischargeDate).diff(dayjs(r.admissionDate), "day")
-    : null;
+function normalizeDate(value) {
+  if (!hasValue(value)) return "—";
+  const d = dayjs(value);
+  return d.isValid() ? d.format("DD MMM YYYY") : String(value);
+}
+
+function parseBloodPressure(bp) {
+  if (!hasValue(bp)) return "—";
+  const [sys, dia] = String(bp).split("/");
+  if (!sys && !dia) return String(bp);
+  return `${sys || "—"}/${dia || "—"}`;
+}
+
+function extractMedicineRows(rawList = []) {
+  const rows = [];
+  rawList.forEach((raw) => {
+    if (!hasValue(raw)) return;
+    String(raw)
+      .split(/\n|;/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .forEach((line) => {
+        const parts = line.split(/\s+-\s+|\s+—\s+|\s+–\s+/);
+        if (parts.length >= 3) {
+          rows.push({ medicineName: parts[0], dosage: parts[1], duration: parts.slice(2).join(" - ") });
+          return;
+        }
+        rows.push({ medicineName: line, dosage: "As advised", duration: "As advised" });
+      });
+  });
+
+  const map = new Map();
+  rows.forEach((r) => {
+    const key = `${r.medicineName}__${r.dosage}__${r.duration}`;
+    if (!map.has(key)) map.set(key, r);
+  });
+  return [...map.values()];
+}
+
+function resolvePatientAge(reportAge, patientAge) {
+  if (hasValue(patientAge)) return patientAge;
+  if (hasValue(reportAge)) return reportAge;
+  return "—";
+}
+
+/* ─── build day-numbered entries from daily reports ─────────────────────── */
+function buildDayEntries(dailyReports = []) {
+  const dateOrder = [];
+  const seen = new Map();
+  dailyReports.forEach((d) => {
+    const key = d.date || "";
+    if (!seen.has(key)) { seen.set(key, dateOrder.length + 1); dateOrder.push(key); }
+  });
+  return dailyReports.map((d) => ({ ...d, dayNumber: seen.get(d.date || "") ?? 0 }));
+}
+
+
+async function downloadReport() {
+  const el = document.getElementById("report");
+  if (!el) return;
+  const html2pdf = (await import("html2pdf.js")).default;
+  html2pdf()
+    .set({
+      margin:      [10, 14, 10, 14],
+      filename:    "Patient_Report.pdf",
+      image:       { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF:       { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak:   { mode: ["avoid-all", "css", "legacy"] },
+    })
+    .from(el)
+    .save();
+}
+
+function ReportContent({ report: r, patientDetails }) {
+  const admDayjs  = dayjs(r.admissionDate);
+  const disDayjs  = dayjs(r.dischargeDate);
+  const totalDays = admDayjs.isValid() && disDayjs.isValid()
+    ? disDayjs.diff(admDayjs, "day") + 1
+    : hasValue(r.totalDaysStayed) ? Number(r.totalDaysStayed) : null;
 
   const reportId  = `MDH-${(r.patientId ?? "").slice(-6).toUpperCase() || "000000"}-${dayjs().format("YYYYMMDD")}`;
-  const lastEntry = r.dailyReports?.at(-1);
+  const lastEntry = r.dailyReports?.at(-1) || null;
+  const resolvedAge = resolvePatientAge(r.age, patientDetails?.age);
 
-  const allMeds = [...new Set(
-    (r.dailyReports ?? []).map(d => d.medicines).filter(Boolean)
-  )].join("; ") || "—";
+  const p = patientDetails || {};
 
-  const TH = ["Date","Temp °F","BP","HR","SpO₂ %","Symptoms","Diagnosis","Treatment","Medicines","Remarks","Status"];
+  const patientRows = [
+    ["Patient Name",          r.patientName || p.name || "—"],
+    ["Age",                   resolvedAge],
+    ["Gender",                r.gender || p.gender || "—"],
+    ["Patient Suffering From",r.patientSufferingFrom || r.disease || p.disease || "—"],
+    ["Admission Date",        normalizeDate(r.admissionDate || p.admissionDate)],
+    hasValue(r.bedWardNumber || p.bedWardNumber || p.bedNumber) ? ["Bed/Ward Number", r.bedWardNumber || p.bedWardNumber || p.bedNumber] : null,
+    hasValue(r.contactNumber || p.phone) ? ["Contact Number", r.contactNumber || p.phone] : null,
+  ].filter(Boolean);
+
+  const doctorRows = [
+    ["Assigned Doctor", r.doctorName || "—"],
+    ["Department", r.department || "—"],
+    hasValue(r.treatmentSummary) ? ["Treatment Summary", r.treatmentSummary] : null,
+    hasValue(r.proceduresPerformed) ? ["Procedures Performed", r.proceduresPerformed] : null,
+    ["Patient Final Status", lastEntry?.patientStatus || r.patientFinalStatus || "Discharged"],
+    hasValue(r.finalRemarks) ? ["Final Remarks", r.finalRemarks] : null,
+  ].filter(Boolean);
+
+  const stayRows = [
+    ["Reason for Admission", r.reasonForAdmission || r.patientSufferingFrom || r.disease || "—"],
+    ["Condition on Admission", r.conditionOnAdmission || "Admitted"],
+    ["Condition on Discharge", r.conditionOnDischarge || lastEntry?.patientStatus || "Discharged"],
+  ];
+
+  const medicineRows = extractMedicineRows([
+    ...(r.dailyReports ?? []).map((d) => d.medicines),
+    r.medicinesPrescribed,
+  ]);
+
+  const followUpText = hasValue(r.followUpDate) ? normalizeDate(r.followUpDate) : "";
 
   return (
-    <div id={`fsr-${r.patientId}`} style={S.page}>
+    <div id="report" style={S.page}>
 
-      {/* ── HEADER ── */}
       <div style={S.header}>
         <div>
           <p style={S.hospName}>MediDash Hospital</p>
           <p style={S.hospSub}>Advanced Healthcare &amp; Medical Services</p>
         </div>
         <div style={S.headerR}>
-          <span style={S.reportTag}>Final Stay Report</span>
+          <span style={S.reportTag}>Final Patient Stay Report</span>
           <span>Report ID: <strong style={{ color: BODY }}>{reportId}</strong></span><br />
           <span>Generated: {new Date().toLocaleString()}</span>
         </div>
       </div>
 
-      {/* ── PATIENT + DOCTOR ── */}
-      <div style={{ ...S.grid2, marginBottom: 28 }}>
+      <div style={{ ...S.grid2, marginBottom: 24 }}>
         <div>
           <SecTitle>Patient Information</SecTitle>
-          <Row label="Full Name"         value={r.patientName} />
-          <Row label="Department"        value={r.department} />
-          <Row label="Admission Date"    value={r.admissionDate} />
-          <Row label="Discharge Date"    value={r.dischargeDate} />
-          <Row label="Total Days Stayed" value={totalDays != null ? `${totalDays} days` : "—"} />
+          {patientRows.map(([label, value]) => (
+            <Row key={label} label={label} value={value} />
+          ))}
         </div>
         <div>
           <SecTitle>Doctor Information</SecTitle>
-          <Row label="Assigned Doctor"   value={r.doctorName} />
-          <Row label="Final Diagnosis"   value={r.finalDiagnosis} />
-          <Row label="Treatment Summary" value={r.treatmentSummary} />
-          <Row label="Final Remarks"     value={r.finalRemarks} />
+          {doctorRows.map(([label, value]) => (
+            <Row key={label} label={label} value={value} />
+          ))}
         </div>
       </div>
 
-      {/* ── ADMISSION SUMMARY ── */}
       <div style={S.section}>
-        <SecTitle>Admission &amp; Stay Summary</SecTitle>
-        <Row label="Admission Date"    value={r.admissionDate} />
-        <Row label="Discharge Date"    value={r.dischargeDate} />
-        <Row label="Total Days Stayed" value={totalDays != null ? `${totalDays} days` : "—"} />
-        <Row label="Final Diagnosis"   value={r.finalDiagnosis} />
-        <div style={S.row}>
-          <span style={S.rowLabel}>Patient Final Status</span>
-          <StatusDot status={lastEntry?.patientStatus} />
-        </div>
-      </div>
-
-      {/* ── DAY-BY-DAY TABLE ── */}
-      <div style={S.section}>
-        <SecTitle>Day-by-Day Medical Report ({r.dailyReports?.length ?? 0} entries)</SecTitle>
+        <SecTitle>Day-by-Day Medical Report</SecTitle>
+        <p style={{ ...S.prose, ...S.rowLabel, marginBottom: 8, fontWeight: 700 }}>Vitals Table</p>
         {r.dailyReports?.length > 0 ? (
           <div style={S.tableWrap}>
             <table style={S.table}>
               <thead>
-                <tr>{TH.map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
+                <tr>
+                  {["Date", "Temp", "BP", "HR", "SpO2", "Status"].map((h) => (
+                    <th key={h} style={S.th}>{h}</th>
+                  ))}
+                </tr>
               </thead>
               <tbody>
                 {r.dailyReports.map((d, i) => {
@@ -214,16 +324,11 @@ function ReportContent({ report: r }) {
                   const td = { ...S.tdBase, background: bg };
                   return (
                     <tr key={d._id ?? i}>
-                      <td style={{ ...td, fontWeight: 600, whiteSpace: "nowrap" }}>{d.date}</td>
-                      <td style={td}>{d.temperature  || "—"}</td>
-                      <td style={td}>{d.bloodPressure || "—"}</td>
-                      <td style={td}>{d.heartRate     || "—"}</td>
-                      <td style={td}>{d.oxygenLevel   || "—"}</td>
-                      <td style={td}>{d.symptoms      || "—"}</td>
-                      <td style={td}>{d.diagnosis     || "—"}</td>
-                      <td style={td}>{d.treatment     || "—"}</td>
-                      <td style={td}>{d.medicines     || "—"}</td>
-                      <td style={td}>{d.doctorRemarks || "—"}</td>
+                      <td style={{ ...td, fontWeight: 600, whiteSpace: "nowrap" }}>{normalizeDate(d.date)}</td>
+                      <td style={td}>{d.temperature || "—"}</td>
+                      <td style={td}>{parseBloodPressure(d.bloodPressure)}</td>
+                      <td style={td}>{d.heartRate || "—"}</td>
+                      <td style={td}>{d.oxygenLevel || "—"}</td>
                       <td style={td}><StatusDot status={d.patientStatus} /></td>
                     </tr>
                   );
@@ -236,55 +341,93 @@ function ReportContent({ report: r }) {
         )}
       </div>
 
-      {/* ── FINAL TREATMENT SUMMARY ── */}
       <div style={S.section}>
-        <SecTitle>Final Treatment Summary</SecTitle>
-        <p style={{ ...S.prose, ...S.rowLabel, fontSize: 11, marginBottom: 2 }}>Treatment Summary</p>
-        <p style={S.prose}>{r.treatmentSummary || "—"}</p>
-        <p style={{ ...S.prose, ...S.rowLabel, fontSize: 11, marginBottom: 2, marginTop: 10 }}>Medicines Prescribed</p>
-        <p style={S.prose}>{allMeds}</p>
+        <p style={{ ...S.prose, ...S.rowLabel, marginBottom: 8, fontWeight: 700 }}>Daily Medical Notes</p>
+        {r.dailyReports?.length > 0 ? (
+          <div>
+            {buildDayEntries(r.dailyReports).map((d, i) => (
+              <div key={d._id ?? i} style={S.dayCard}>
+                <p style={S.dayHead}>
+                  Day {d.dayNumber} — {normalizeDate(d.date)}
+                  {d.visitSlot ? <span style={{ fontWeight: 400, color: MUTED }}> ({d.visitSlot})</span> : null}
+                </p>
+                <p style={S.prose}><strong>Symptoms:</strong> {d.symptoms || "—"}</p>
+                <p style={S.prose}><strong>Diagnosis:</strong> {d.diagnosis || "—"}</p>
+                <p style={S.prose}><strong>Treatment:</strong> {d.treatment || "—"}</p>
+                <p style={S.prose}><strong>Medicines:</strong> {d.medicines || "—"}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ fontSize: 12, color: FAINT }}>No daily notes recorded.</p>
+        )}
       </div>
 
-      {/* ── FINAL REMARKS ── */}
       <div style={S.section}>
-        <SecTitle>Final Remarks</SecTitle>
-        <p style={S.prose}>{r.finalRemarks || "—"}</p>
+        <SecTitle>Medicines Prescribed</SecTitle>
+        {medicineRows.length > 0 ? (
+          <div style={S.tableWrap}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  {["Medicine Name", "Dosage", "Duration"].map((h) => (
+                    <th key={h} style={S.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {medicineRows.map((m, idx) => (
+                  <tr key={`${m.medicineName}-${idx}`}>
+                    <td style={S.tdBase}>{m.medicineName}</td>
+                    <td style={S.tdBase}>{m.dosage}</td>
+                    <td style={S.tdBase}>{m.duration}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p style={{ fontSize: 12, color: FAINT }}>No medicine details recorded.</p>
+        )}
       </div>
 
-      {/* ── DISCHARGE INSTRUCTIONS ── */}
+      <div style={S.section}>
+        <SecTitle>Final Remarks &amp; Advice</SecTitle>
+        <Row label="Rest Advice" value={r.restAdvice || "Take sufficient rest and avoid overexertion."} />
+        <Row label="Diet Advice" value={r.dietAdvice || "Maintain balanced diet and adequate hydration."} />
+        {hasValue(followUpText) && <Row label="Follow-up" value={followUpText} />}
+        <Row label="Restrictions Summary" value={r.restrictionsSummary || r.finalRemarks || "Follow doctor guidance and avoid self-medication."} />
+      </div>
+
       <div style={S.section}>
         <SecTitle>Discharge Instructions</SecTitle>
-        {[
-          { n: "01", label: "Rest",        text: "Complete bed rest for 5–7 days. Avoid strenuous physical activity until follow-up clearance." },
-          { n: "02", label: "Follow-Up",   text: "Schedule a follow-up appointment within 7 days of discharge. Bring this report to your next visit." },
-          { n: "03", label: "Precautions", text: "Take all prescribed medicines on time. Avoid self-medication. Contact the hospital immediately if symptoms recur." },
-        ].map(({ n, label, text }) => (
-          <div key={n} style={S.instrRow}>
-            <span style={S.instrNum}>{n}</span>
-            <span>
-              <strong style={{ color: BODY }}>{label} — </strong>
-              <span style={{ color: MUTED }}>{text}</span>
-            </span>
-          </div>
-        ))}
+        <ul style={S.bullet}>
+          <li>Take proper rest</li>
+          <li>Take medicines on time</li>
+          <li>Follow doctor instructions</li>
+          <li>Bring this report during follow-up visit</li>
+          <li>Contact hospital if symptoms return</li>
+        </ul>
       </div>
 
-      {/* ── SIGNATURE ── */}
       <div style={S.section}>
-        <SecTitle>Authorisation</SecTitle>
+        <SecTitle>Authorization Section</SecTitle>
         <div style={S.sigGrid}>
           <div style={S.sigBox}>
             <p style={S.sigName}>{r.doctorName || "Attending Physician"}</p>
             <p style={S.sigRole}>Doctor's Signature</p>
           </div>
-          <div style={{ ...S.sigBox, borderTopStyle: "dashed", borderTopColor: ACCENT }}>
+          <div style={{ ...S.sigBox, borderTopStyle: "dashed", borderTopColor: BORDER }}>
             <p style={S.sigName}>MediDash Hospital</p>
             <p style={S.sigRole}>Hospital Stamp &amp; Seal</p>
+          </div>
+          <div style={S.sigBox}>
+            <p style={S.sigName}>{normalizeDate(r.dischargeDate)}</p>
+            <p style={S.sigRole}>Date</p>
           </div>
         </div>
       </div>
 
-      {/* ── FOOTER ── */}
       <div style={S.footer}>
         <span>MediDash Hospital Management System · {new Date().getFullYear()}</span>
         <span style={S.footerC}>Confidential Medical Record</span>
@@ -294,6 +437,12 @@ function ReportContent({ report: r }) {
     </div>
   );
 }
+
+/* ─── drawer label style ─────────────────────────────────────────────────── */
+const DL = {
+  fontSize: 10, fontWeight: 700, color: MUTED,
+  textTransform: "uppercase", letterSpacing: 1.1, marginBottom: 6,
+};
 
 /* ─── drawer preview card ─────────────────────────────────────────────────── */
 function PreviewRow({ label, value }) {
@@ -326,7 +475,7 @@ function FinalStayReport() {
     setReport(null);
     setLoading(true);
     const data = await fetch(`${API}/final-reports/${patient._id}`).then(r => r.json());
-    setReport(data);
+    setReport(data ? { ...data, age: resolvePatientAge(data.age, patient.age) } : null);
     setLoading(false);
   };
 
@@ -336,16 +485,38 @@ function FinalStayReport() {
       fetch(`${API}/daily-reports/${selected._id}`).then(r => r.json()),
       fetch(`${API}/reports/${selected._id}`).then(r => r.json()),
     ]);
-    const discharge = dischargeReports.at(-1) ?? {};
+    const discharge = dischargeReports.at(0) ?? {};
+    const latestPatient = patients.find((p) => p._id === selected._id) || selected;
     const payload = {
-      patientId:        selected._id,
-      patientName:      selected.name,
-      department:       selected.department,
-      admissionDate:    selected.admissionDate || discharge.admissionDate || "",
-      dischargeDate:    discharge.dischargeDate || "",
+      patientId:        latestPatient._id,
+      patientName:      latestPatient.name,
+      age:              resolvePatientAge(null, latestPatient.age),
+      gender:           latestPatient.gender,
+      disease:          latestPatient.disease,
+      patientSufferingFrom: latestPatient.disease,
+      contactNumber:    latestPatient.phone || "",
+      bloodGroup:       latestPatient.bloodGroup || "",
+      address:          latestPatient.address || "",
+      email:            latestPatient.email || "",
+      bedWardNumber:    latestPatient.bedWardNumber || latestPatient.bedNumber || latestPatient.wardNumber || "",
+      department:       latestPatient.department,
+      admissionDate:    latestPatient.admissionDate || discharge.admissionDate || "",
+      dischargeDate:    discharge.dischargeDate || latestPatient.dischargeDate || dailyReports.at(-1)?.date || "",
+      totalDaysStayed:  (() => {
+        const a = dayjs(latestPatient.admissionDate || discharge.admissionDate);
+        const d = dayjs(discharge.dischargeDate || latestPatient.dischargeDate);
+        return a.isValid() && d.isValid() ? d.diff(a, "day") + 1 : "";
+      })(),
       doctorName:       discharge.doctorName || "",
       finalDiagnosis:   discharge.diagnosis || "",
       treatmentSummary: discharge.treatment || "",
+      proceduresPerformed: discharge.operationDetails || "",
+      patientFinalStatus: dailyReports.at(-1)?.patientStatus || "Discharged",
+      reasonForAdmission: latestPatient.disease || "",
+      conditionOnAdmission: "Admitted",
+      conditionOnDischarge: dailyReports.at(-1)?.patientStatus || "Discharged",
+      medicinesPrescribed: discharge.medicines || "",
+      followUpDate:     discharge.followUpDate || "",
       finalRemarks:     discharge.notes || "",
       dailyReports,
     };
@@ -359,9 +530,11 @@ function FinalStayReport() {
     setGenerating(false);
   };
 
-  const totalDays = report?.admissionDate && report?.dischargeDate
-    ? dayjs(report.dischargeDate).diff(dayjs(report.admissionDate), "day")
-    : null;
+  const admD = report?.admissionDate ? dayjs(report.admissionDate) : null;
+  const disD = report?.dischargeDate  ? dayjs(report.dischargeDate)  : null;
+  const totalDays = admD?.isValid() && disD?.isValid()
+    ? disD.diff(admD, "day") + 1
+    : report?.totalDaysStayed != null ? Number(report.totalDaysStayed) : null;
 
   const columns = [
     { title: "Name",           dataIndex: "name",         sorter: (a, b) => a.name.localeCompare(b.name) },
@@ -382,15 +555,12 @@ function FinalStayReport() {
   return (
     <div>
       {/* page heading */}
-      <div className="mb-6">
-        <h2 className="text-[22px] font-bold">Final Stay Reports</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          Generate and download complete stay reports for discharged patients.
-        </p>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1d2e", margin: 0 }}>Final Stay Reports</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>Generate and download complete stay reports for discharged patients.</p>
       </div>
 
-      {/* patients table */}
-      <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div style={{ background: "#fff", borderRadius: 14, padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Table
           columns={columns}
           dataSource={patients}
@@ -416,11 +586,11 @@ function FinalStayReport() {
             {!report && !loading && (
               <Button type="primary" loading={generating} onClick={generateReport}
                 style={{ background: ACCENT, borderColor: ACCENT }}>
-                Generate Report
+                Generate Final Report
               </Button>
             )}
             {report && (
-              <Button type="primary" onClick={() => printReport(selected._id)}
+              <Button type="primary" onClick={downloadReport}
                 style={{ background: DARK, borderColor: DARK }}>
                 Download PDF
               </Button>
@@ -436,7 +606,7 @@ function FinalStayReport() {
           <Empty
             description={
               <span style={{ color: MUTED, fontSize: 13 }}>
-                No report generated yet. Click <strong>Generate Report</strong> to create one.
+                No report generated yet. Click <strong>Generate Final Report</strong> to create one.
               </span>
             }
           />
@@ -444,35 +614,37 @@ function FinalStayReport() {
 
         {!loading && report && (
           <>
-            {/* ── quick stats strip ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)",
-                          gap: 1, background: BORDER, borderRadius: 10,
-                          overflow: "hidden", marginBottom: 24 }}>
+            {/* ── key dates strip ── */}
+            <div style={{ display: "flex", gap: 32, marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${BORDER}` }}>
               {[
-                { label: "Total Days",     value: totalDays != null ? `${totalDays} days` : "—" },
-                { label: "Admission Date", value: report.admissionDate || "—" },
-                { label: "Discharge Date", value: report.dischargeDate || "—" },
+                { label: "Admission",   value: normalizeDate(report.admissionDate) },
               ].map(s => (
-                <div key={s.label} style={{ background: "#fff", padding: "14px 18px", textAlign: "center" }}>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: DARK, margin: 0 }}>{s.value}</p>
-                  <p style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>{s.label}</p>
+                <div key={s.label}>
+                  <p style={{ fontSize: 11, color: FAINT, margin: 0 }}>{s.label}</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: DARK, margin: "2px 0 0" }}>{s.value}</p>
                 </div>
               ))}
             </div>
 
             {/* ── patient + doctor ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
-                <p style={{ fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase",
-                            letterSpacing: 1.2, marginBottom: 8 }}>Patient</p>
-                <PreviewRow label="Name"       value={report.patientName} />
-                <PreviewRow label="Department" value={report.department} />
+                <p style={DL}>Patient</p>
+                <PreviewRow label="Name"               value={report.patientName || selected?.name} />
+                <PreviewRow label="Age"                value={resolvePatientAge(report.age, selected?.age)} />
+                <PreviewRow label="Gender"             value={report.gender || selected?.gender} />
+                <PreviewRow label="Contact"            value={report.contactNumber || selected?.phone} />
+                <PreviewRow label="Department"         value={report.department || selected?.department} />
+                <PreviewRow label="Admission Date"     value={normalizeDate(report.admissionDate || selected?.admissionDate)} />
               </div>
               <div>
-                <p style={{ fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase",
-                            letterSpacing: 1.2, marginBottom: 8 }}>Doctor</p>
-                <PreviewRow label="Assigned Doctor" value={report.doctorName} />
-                <PreviewRow label="Final Diagnosis" value={report.finalDiagnosis} />
+                <p style={DL}>Admission</p>
+                <PreviewRow label="Reason for Admission" value={report.reasonForAdmission || report.disease || selected?.disease} />
+                <PreviewRow label="Condition on Admission" value={report.conditionOnAdmission} />
+                <PreviewRow label="Condition on Discharge" value={report.conditionOnDischarge} />
+                <p style={{ ...DL, marginTop: 14 }}>Doctor</p>
+                <PreviewRow label="Assigned Doctor"   value={report.doctorName} />
+                <PreviewRow label="Final Diagnosis"   value={report.finalDiagnosis} />
               </div>
             </div>
 
@@ -480,50 +652,48 @@ function FinalStayReport() {
             {[
               { label: "Treatment Summary", value: report.treatmentSummary },
               { label: "Final Remarks",     value: report.finalRemarks },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase",
-                            letterSpacing: 1.2, marginBottom: 6 }}>{label}</p>
+            ].map(({ label, value }) => value ? (
+              <div key={label} style={{ marginBottom: 14 }}>
+                <p style={DL}>{label}</p>
                 <p style={{ fontSize: 13, color: BODY, lineHeight: 1.7,
                             padding: "10px 14px", background: SURFACE,
-                            borderRadius: 8, border: `1px solid ${BORDER}` }}>
-                  {value || "—"}
+                            borderRadius: 8, border: `1px solid ${BORDER}`, margin: 0 }}>
+                  {value}
                 </p>
               </div>
-            ))}
+            ) : null)}
 
             {/* ── daily entries ── */}
-            <p style={{ fontSize: 10, fontWeight: 700, color: ACCENT, textTransform: "uppercase",
-                        letterSpacing: 1.2, marginBottom: 10, marginTop: 4 }}>
+            <p style={{ ...DL, marginBottom: 10, marginTop: 4 }}>
               Day-by-Day Summary ({report.dailyReports?.length ?? 0} entries)
             </p>
             {report.dailyReports?.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {report.dailyReports.map((d, i) => (
+                {buildDayEntries(report.dailyReports).map((d, i) => (
                   <div key={d._id ?? i}
                     style={{ border: `1px solid ${BORDER}`, borderRadius: 10,
                              padding: "12px 16px", background: "#fff" }}>
-                    {/* row 1 — date + status */}
                     <div style={{ display: "flex", justifyContent: "space-between",
                                   alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: DARK }}>{d.date}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: DARK }}>
+                        Day {d.dayNumber} — {normalizeDate(d.date)}
+                        {d.visitSlot && <span style={{ fontWeight: 400, color: MUTED, fontSize: 12 }}> ({d.visitSlot})</span>}
+                      </span>
                       <StatusDot status={d.patientStatus} />
                     </div>
                     {/* row 2 — vitals */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)",
-                                  gap: 8, marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 20, marginBottom: 8, fontSize: 12, color: BODY }}>
                       {[
                         { l: "Temp",  v: d.temperature },
                         { l: "BP",    v: d.bloodPressure },
                         { l: "HR",    v: d.heartRate },
                         { l: "SpO₂", v: d.oxygenLevel },
-                      ].map(({ l, v }) => (
-                        <div key={l} style={{ background: SURFACE, borderRadius: 7,
-                                              padding: "7px 10px", textAlign: "center" }}>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: BODY, margin: 0 }}>{v || "—"}</p>
-                          <p style={{ fontSize: 10, color: FAINT, marginTop: 2 }}>{l}</p>
-                        </div>
-                      ))}
+                      ].map(({ l, v }) => v ? (
+                        <span key={l}>
+                          <span style={{ color: FAINT }}>{l}: </span>
+                          <span style={{ fontWeight: 600 }}>{v}</span>
+                        </span>
+                      ) : null)}
                     </div>
                     {/* row 3 — clinical */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
@@ -548,7 +718,7 @@ function FinalStayReport() {
 
             {/* hidden printable */}
             <div style={{ display: "none" }}>
-              <ReportContent report={report} />
+              <ReportContent report={report} patientDetails={selected} />
             </div>
           </>
         )}
